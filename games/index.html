@@ -95,21 +95,14 @@
 
 <script>
 function openGame(game) {
-  if (game === "game1") {
-    window.location.href = "game.swf";
-  }
+    const games = {
+        game1: "game.swf",
+        game2: "game2.swf",
+        game3: "game3.swf",
+        game4: "game4.swf"
+    };
 
-  if (game === "game2") {
-    window.location.href = "game2.swf";
-  }
-
-  if (game === "game3") {
-    window.location.href = "game3.swf";
-  }
-
-  if (game === "game4") {
-    window.location.href = "game4.swf";
-  }
+    window.location.href = "player.html?game=" + encodeURIComponent(games[game]);
 }
 </script>
 
