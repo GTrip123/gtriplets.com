@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>gtrip's games</title>
-
 <style>
   body {
     background: #111;
@@ -67,14 +67,14 @@
 <div class="games">
 
   <div class="card">
-    <h2>blank title </h2>
-    <p>blank</p>
+    <h2>snake game</h2>
+    <p>play snake online</p>
     <button class="play" onclick="openGame('game1')">play</button>
   </div>
 
   <div class="card">
-    <h2>some more blank</h2>
-    <p>blank fun blank</p>
+    <h2>age of war 2</h2>
+    <p>play age of war 2 online</p>
     <button class="play" onclick="openGame('game2')">play</button>
   </div>
 
@@ -96,19 +96,19 @@
 <script>
 function openGame(game) {
   if (game === "game1") {
-    window.location.href = "blank.html";
+    window.location.href = "game.swf";
   }
 
   if (game === "game2") {
-    window.location.href = "blank.html";
+    window.location.href = "game2.swf";
   }
 
   if (game === "game3") {
-    window.location.href = "blank.html";
+    window.location.href = "game3.swf";
   }
 
   if (game === "game4") {
-    window.location.href = "blank.html";
+    window.location.href = "game4.swf";
   }
 }
 </script>
