@@ -1,5 +1,4 @@
 User-agent: *
-Disallow: /games
-Disallow: /favicon.ico
 Disallow: /drafts/
 Disallow: /admin/
+Disallow: /wp/
