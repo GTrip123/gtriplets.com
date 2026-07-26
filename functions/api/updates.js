@@ -23,10 +23,8 @@ export async function onRequest(context) {
       url: "#"
     },
   ];
-
   return Response.json(updates);
-}
-    const { UPDATES } = context.env;
+  const { UPDATES } = context.env;
 
     const data = await UPDATES.get("updates");
 
