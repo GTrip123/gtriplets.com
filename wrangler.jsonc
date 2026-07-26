@@ -1,0 +1,12 @@
+{
+  "name": "gtriplets-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-26",
+
+  "kv_namespaces": [
+    {
+      "binding": "UPDATES",
+      "id": "3c846e622cfd4e32a74c1e304cc89e3f"
+    }
+  ]
+}
