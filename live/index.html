@@ -50,6 +50,45 @@
       margin: 30px;
       color: #9ca3af;
     }
+    .stream-box {
+  position: relative;
+  width: 800px;
+  height: 450px;
+  max-width: 100%;
+  background: #000;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.stream-box iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.resize-handle {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  background: rgba(255, 255, 255, 0.85);
+  clip-path: polygon(100% 0, 0 100%, 100% 100%);
+  border-radius: 3px;
+}
+
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid rgba(0, 0, 0, 0.5);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.5);
+}
   </style>
 </head>
 
@@ -129,15 +168,52 @@ console.log("loadCommits called");
 loadCommits();
 
 </script>
-  <section class="stream-wrap">
-  <div class="stream-wrap">
+  <div class="stream-box" id="streamBox">
   <iframe
     src="https://player.twitch.tv/?channel=gtripletsy&parent=gtriplets.com"
-    height="720"
-    width="1280"
     allowfullscreen>
   </iframe>
-  </section>
+
+  <div class="resize-handle" title="Drag to resize"></div>
+</div>
+
+<script>
+  const box = document.getElementById("streamBox");
+  const handle = box.querySelector(".resize-handle");
+
+  let resizing = false;
+  let startX = 0, startY = 0;
+  let startW = 0, startH = 0;
+
+  handle.addEventListener("pointerdown", (e) => {
+    resizing = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    const rect = box.getBoundingClientRect();
+    startW = rect.width;
+    startH = rect.height;
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  handle.addEventListener("pointermove", (e) => {
+    if (!resizing) return;
+
+    const newW = Math.max(320, startW + (e.clientX - startX));
+    const newH = Math.max(180, startH + (e.clientY - startY));
+
+    box.style.width = newW + "px";
+    box.style.height = newH + "px";
+  });
+
+  handle.addEventListener("pointerup", () => {
+    resizing = false;
+  });
+
+  handle.addEventListener("pointercancel", () => {
+    resizing = false;
+  });
+</script>
 
 </body>
 </html>
