@@ -26,3 +26,9 @@ export async function onRequest(context) {
 
   return Response.json(updates);
 }
+    const { UPDATES } = context.env;
+
+    const data = await UPDATES.get("updates");
+
+    return Response.json(JSON.parse(data || "[]"));
+}
