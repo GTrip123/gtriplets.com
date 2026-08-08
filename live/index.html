@@ -168,52 +168,7 @@ console.log("loadCommits called");
 loadCommits();
 
 </script>
-  <div class="stream-box" id="streamBox">
-  <iframe
-    src="https://player.twitch.tv/?channel=gtripletsy&parent=gtriplets.com"
-    allowfullscreen>
-  </iframe>
 
-  <div class="resize-handle" title="Drag to resize"></div>
-</div>
-
-<script>
-  const box = document.getElementById("streamBox");
-  const handle = box.querySelector(".resize-handle");
-
-  let resizing = false;
-  let startX = 0, startY = 0;
-  let startW = 0, startH = 0;
-
-  handle.addEventListener("pointerdown", (e) => {
-    resizing = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    const rect = box.getBoundingClientRect();
-    startW = rect.width;
-    startH = rect.height;
-    handle.setPointerCapture(e.pointerId);
-    e.preventDefault();
-  });
-
-  handle.addEventListener("pointermove", (e) => {
-    if (!resizing) return;
-
-    const newW = Math.max(320, startW + (e.clientX - startX));
-    const newH = Math.max(180, startH + (e.clientY - startY));
-
-    box.style.width = newW + "px";
-    box.style.height = newH + "px";
-  });
-
-  handle.addEventListener("pointerup", () => {
-    resizing = false;
-  });
-
-  handle.addEventListener("pointercancel", () => {
-    resizing = false;
-  });
-</script>
 
 </body>
 </html>
