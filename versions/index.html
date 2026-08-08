@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Website Versions</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 40px 20px;
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+    }
+
+    .deployment {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    }
+
+    .deployment.current {
+      border: 2px solid #2ecc71;
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .commit {
+      font-family: monospace;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .message {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 8px 0;
+    }
+
+    .details {
+      color: #777;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+
+    .buttons {
+      margin-top: 18px;
+      display: flex;
+      gap: 10px;
+    }
+
+    button,
+    .view {
+      border: 0;
+      padding: 10px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .view {
+      background: #eee;
+      color: #222;
+    }
+
+    .rollback {
+      background: #222;
+      color: white;
+    }
+
+    .rollback:hover {
+      opacity: .85;
+    }
+
+    .current-label {
+      color: #20a85a;
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    .loading,
+    .error {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+    }
+
+    .error {
+      color: #c0392b;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>Website Versions</h1>
+
+  <div class="subtitle">
+    Previous Cloudflare Pages deployments
+  </div>
+
+  <div id="versions">
+    <div class="loading">
+      Loading deployments...
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const API = "https://api.gtriplets.com/v3/";
+
+  async function loadDeployments() {
+    const container = document.getElementById("versions");
+
+    try {
+      const response = await fetch(`${API}/deployments`);
+
+      if (!response.ok) {
+        throw new Error("Failed to load deployments.");
+      }
+
+      const deployments = await response.json();
+
+      if (!Array.isArray(deployments)) {
+        throw new Error("Invalid API response.");
+      }
+
+      container.innerHTML = "";
+
+      if (deployments.length === 0) {
+        container.innerHTML = `
+          <div class="loading">
+            No deployments found.
+          </div>
+        `;
+        return;
+      }
+
+      deployments.forEach((deployment, index) => {
+        const div = document.createElement("div");
+
+        div.className =
+          "deployment" + (index === 0 ? " current" : "");
+
+        const date = deployment.createdOn
+          ? new Date(deployment.createdOn).toLocaleString()
+          : "Unknown date";
+
+        const commit =
+          deployment.commitHash
+            ? deployment.commitHash.substring(0, 8)
+            : "Unknown";
+
+        const message =
+          deployment.commitMessage ||
+          "No commit message";
+
+        const branch =
+          deployment.branch ||
+          "Unknown branch";
+
+        div.innerHTML = `
+          <div class="top">
+
+            <div>
+              <div class="commit">
+                ${escapeHTML(commit)}
+              </div>
+
+              <div class="message">
+                ${escapeHTML(message)}
+              </div>
+
+              <div class="details">
+                ${escapeHTML(date)}
+                •
+                ${escapeHTML(branch)}
+              </div>
+            </div>
+
+            ${
+              index === 0
+                ? `<div class="current-label">CURRENT</div>`
+                : ""
+            }
+
+          </div>
+
+          <div class="buttons">
+
+            ${
+              deployment.url
+                ? `<a
+                    class="view"
+                    href="${escapeAttribute(deployment.url)}"
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    View
+                  </a>`
+                : ""
+            }
+
+            ${
+              index !== 0
+                ? `<button
+                    class="rollback"
+                    onclick="rollback('${escapeAttribute(deployment.id)}')"
+                  >
+                    Rollback
+                  </button>`
+                : ""
+            }
+
+          </div>
+        `;
+
+        container.appendChild(div);
+      });
+
+    } catch (error) {
+      console.error(error);
+
+      container.innerHTML = `
+        <div class="error">
+          Failed to load website versions.
+        </div>
+      `;
+    }
+  }
+
+  async function rollback(deploymentId) {
+
+    const confirmed = confirm(
+      "Are you sure you want to roll the website back to this version?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+
+      const response = await fetch(
+        `${API}/deployments/rollback`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json"
+          },
+
+          body: JSON.stringify({
+            deploymentId
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || "Rollback failed."
+        );
+      }
+
+      alert(
+        "Rollback successful! The website has been rolled back."
+      );
+
+      await loadDeployments();
+
+    } catch (error) {
+
+      console.error(error);
+
+      alert(
+        "Rollback failed: " + error.message
+      );
+    }
+  }
+
+  function escapeHTML(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function escapeAttribute(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+  }
+
+  loadDeployments();
+</script>
+
+</body>
+</html>
