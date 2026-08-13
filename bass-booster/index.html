@@ -1,0 +1,346 @@
+<div id="bass-boost-lab">
+  <div class="card">
+    <div class="bb-grid">
+      <label class="form-label" for="bb-file">
+        Audio file
+        <input class="form-control" id="bb-file" type="file" accept="audio/*">
+      </label>
+
+      <label class="form-label" for="bb-amount">
+        Extra bass: <span id="bb-level">Strong</span> · <span id="bb-db">+7.4 dB</span>
+        <input class="form-range" id="bb-amount" type="range" min="0" max="100" value="30" step="1">
+      </label>
+
+      <div class="bb-scale text-small text-muted" aria-hidden="true">
+        <span>Slight</span><span>Strong</span><span>Heavy</span><span>Severe</span>
+      </div>
+
+      <svg class="bb-curve" viewBox="0 0 680 150" role="img" aria-labelledby="bb-chart-title bb-chart-desc">
+        <title id="bb-chart-title">Bass boost frequency response</title>
+        <desc id="bb-chart-desc">A response curve showing the selected boost applied mostly below 150 hertz.</desc>
+        <g class="bb-gridlines">
+          <line x1="48" y1="22" x2="48" y2="122"></line>
+          <line x1="48" y1="122" x2="654" y2="122"></line>
+          <line x1="48" y1="72" x2="654" y2="72"></line>
+          <line x1="178" y1="22" x2="178" y2="122"></line>
+          <line x1="326" y1="22" x2="326" y2="122"></line>
+          <line x1="512" y1="22" x2="512" y2="122"></line>
+        </g>
+        <path id="bb-area" class="bb-area" d=""></path>
+        <path id="bb-line" class="bb-line" d=""></path>
+        <g class="bb-labels text-small">
+          <text x="48" y="143" text-anchor="middle">20 Hz</text>
+          <text x="178" y="143" text-anchor="middle">60</text>
+          <text x="326" y="143" text-anchor="middle">150</text>
+          <text x="512" y="143" text-anchor="middle">1k</text>
+          <text x="654" y="143" text-anchor="middle">10k</text>
+          <text x="39" y="126" text-anchor="end">0</text>
+          <text id="bb-chart-db" x="39" y="27" text-anchor="end">+7</text>
+        </g>
+      </svg>
+
+      <audio id="bb-audio" controls preload="metadata" aria-label="Bass boosted audio preview"></audio>
+
+      <div class="viz-row">
+        <button class="btn btn-primary" id="bb-export" type="button" disabled>
+          <i data-lucide="download" aria-hidden="true"></i>
+          Export boosted WAV
+        </button>
+        <span id="bb-status" class="text-small text-muted" role="status" aria-live="polite">Choose an audio file to begin.</span>
+      </div>
+
+      <p class="text-small text-muted bb-note">Start with your speaker or headphone volume low. “Severe” uses automatic limiting, but strong bass can still stress small speakers.</p>
+    </div>
+  </div>
+</div>
+
+<style>
+  #bass-boost-lab .bb-grid {
+    display: grid;
+    gap: 1rem;
+  }
+  #bass-boost-lab .bb-scale {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    margin-top: -0.75rem;
+  }
+  #bass-boost-lab .bb-scale span:nth-child(2),
+  #bass-boost-lab .bb-scale span:nth-child(3) {
+    text-align: center;
+  }
+  #bass-boost-lab .bb-scale span:last-child {
+    text-align: right;
+  }
+  #bass-boost-lab .bb-curve {
+    display: block;
+    width: 100%;
+    height: auto;
+    color: var(--muted-foreground);
+  }
+  #bass-boost-lab .bb-gridlines line {
+    stroke: var(--border);
+    stroke-width: 1;
+  }
+  #bass-boost-lab .bb-area {
+    fill: var(--viz-series-1);
+    opacity: 0.14;
+  }
+  #bass-boost-lab .bb-line {
+    fill: none;
+    stroke: var(--viz-series-1);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  #bass-boost-lab .bb-labels {
+    fill: var(--muted-foreground);
+  }
+  #bass-boost-lab audio {
+    width: 100%;
+  }
+  #bass-boost-lab .bb-note {
+    margin: 0;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    #bass-boost-lab .bb-line,
+    #bass-boost-lab .bb-area {
+      transition: d 180ms ease;
+    }
+  }
+</style>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("bass-boost-lab");
+  if (!root) return;
+
+  var fileInput = root.querySelector("#bb-file");
+  var slider = root.querySelector("#bb-amount");
+  var levelText = root.querySelector("#bb-level");
+  var dbText = root.querySelector("#bb-db");
+  var chartDb = root.querySelector("#bb-chart-db");
+  var curveLine = root.querySelector("#bb-line");
+  var curveArea = root.querySelector("#bb-area");
+  var audio = root.querySelector("#bb-audio");
+  var exportButton = root.querySelector("#bb-export");
+  var status = root.querySelector("#bb-status");
+
+  var audioContext = null;
+  var mediaSource = null;
+  var bassFilter = null;
+  var limiter = null;
+  var outputGain = null;
+  var currentObjectUrl = null;
+  var selectedFile = null;
+
+  function boostDb() {
+    return 2 + Number(slider.value) * 0.18;
+  }
+
+  function levelName(value) {
+    if (value < 25) return "Slight";
+    if (value < 50) return "Strong";
+    if (value < 75) return "Heavy";
+    return "Severe";
+  }
+
+  function compensationDb(boost) {
+    return -Math.max(0, (boost - 2) * 0.3);
+  }
+
+  function dbToGain(db) {
+    return Math.pow(10, db / 20);
+  }
+
+  function curveY(freq, boost) {
+    var shelf = boost / (1 + Math.pow(freq / 115, 3.2));
+    return 122 - (shelf / 20) * 94;
+  }
+
+  function curveX(freq) {
+    var minLog = Math.log10(20);
+    var maxLog = Math.log10(10000);
+    return 48 + ((Math.log10(freq) - minLog) / (maxLog - minLog)) * 606;
+  }
+
+  function updateCurve(boost) {
+    var points = [];
+    var steps = 72;
+    for (var i = 0; i <= steps; i += 1) {
+      var frequency = 20 * Math.pow(10000 / 20, i / steps);
+      points.push([curveX(frequency), curveY(frequency, boost)]);
+    }
+    var line = points.map(function (point, index) {
+      return (index === 0 ? "M" : "L") + point[0].toFixed(1) + " " + point[1].toFixed(1);
+    }).join(" ");
+    curveLine.setAttribute("d", line);
+    curveArea.setAttribute("d", line + " L654 122 L48 122 Z");
+    chartDb.textContent = "+" + Math.round(boost);
+  }
+
+  function updateAmount() {
+    var boost = boostDb();
+    levelText.textContent = levelName(Number(slider.value));
+    dbText.textContent = "+" + boost.toFixed(1) + " dB";
+    updateCurve(boost);
+    if (bassFilter && outputGain) {
+      bassFilter.gain.setTargetAtTime(boost, audioContext.currentTime, 0.02);
+      outputGain.gain.setTargetAtTime(dbToGain(compensationDb(boost)), audioContext.currentTime, 0.02);
+    }
+  }
+
+  function ensureAudioGraph() {
+    if (!audioContext) {
+      var Context = window.AudioContext || window.webkitAudioContext;
+      audioContext = new Context();
+      mediaSource = audioContext.createMediaElementSource(audio);
+
+      bassFilter = audioContext.createBiquadFilter();
+      bassFilter.type = "lowshelf";
+      bassFilter.frequency.value = 115;
+      bassFilter.gain.value = boostDb();
+
+      limiter = audioContext.createDynamicsCompressor();
+      limiter.threshold.value = -8;
+      limiter.knee.value = 2;
+      limiter.ratio.value = 16;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.18;
+
+      outputGain = audioContext.createGain();
+      outputGain.gain.value = dbToGain(compensationDb(boostDb()));
+
+      mediaSource.connect(bassFilter);
+      bassFilter.connect(limiter);
+      limiter.connect(outputGain);
+      outputGain.connect(audioContext.destination);
+    }
+    if (audioContext.state === "suspended") {
+      audioContext.resume();
+    }
+  }
+
+  function writeAscii(view, offset, text) {
+    for (var i = 0; i < text.length; i += 1) {
+      view.setUint8(offset + i, text.charCodeAt(i));
+    }
+  }
+
+  function encodeWav(buffer) {
+    var channels = buffer.numberOfChannels;
+    var frames = buffer.length;
+    var bytesPerSample = 2;
+    var blockAlign = channels * bytesPerSample;
+    var result = new ArrayBuffer(44 + frames * blockAlign);
+    var view = new DataView(result);
+    var offset = 44;
+
+    writeAscii(view, 0, "RIFF");
+    view.setUint32(4, 36 + frames * blockAlign, true);
+    writeAscii(view, 8, "WAVE");
+    writeAscii(view, 12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, channels, true);
+    view.setUint32(24, buffer.sampleRate, true);
+    view.setUint32(28, buffer.sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, 16, true);
+    writeAscii(view, 36, "data");
+    view.setUint32(40, frames * blockAlign, true);
+
+    var channelData = [];
+    for (var channel = 0; channel < channels; channel += 1) {
+      channelData.push(buffer.getChannelData(channel));
+    }
+    for (var frame = 0; frame < frames; frame += 1) {
+      for (var c = 0; c < channels; c += 1) {
+        var sample = Math.max(-1, Math.min(1, channelData[c][frame]));
+        view.setInt16(offset, sample < 0 ? sample * 32768 : sample * 32767, true);
+        offset += 2;
+      }
+    }
+    return result;
+  }
+
+  function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  async function exportBoostedAudio() {
+    if (!selectedFile) return;
+    exportButton.disabled = true;
+    slider.disabled = true;
+    fileInput.disabled = true;
+    status.textContent = "Rendering boosted audio…";
+    try {
+      var Context = window.AudioContext || window.webkitAudioContext;
+      var decodeContext = new Context();
+      var sourceBuffer = await selectedFile.arrayBuffer();
+      var decoded = await decodeContext.decodeAudioData(sourceBuffer.slice(0));
+      var OfflineContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      var offline = new OfflineContext(decoded.numberOfChannels, decoded.length, decoded.sampleRate);
+      var source = offline.createBufferSource();
+      var filter = offline.createBiquadFilter();
+      var compressor = offline.createDynamicsCompressor();
+      var gain = offline.createGain();
+      var boost = boostDb();
+
+      source.buffer = decoded;
+      filter.type = "lowshelf";
+      filter.frequency.value = 115;
+      filter.gain.value = boost;
+      compressor.threshold.value = -8;
+      compressor.knee.value = 2;
+      compressor.ratio.value = 16;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.18;
+      gain.gain.value = dbToGain(compensationDb(boost));
+
+      source.connect(filter);
+      filter.connect(compressor);
+      compressor.connect(gain);
+      gain.connect(offline.destination);
+      source.start(0);
+
+      var rendered = await offline.startRendering();
+      var wav = encodeWav(rendered);
+      var baseName = selectedFile.name.replace(/\.[^.]+$/, "") || "audio";
+      downloadBlob(new Blob([wav], { type: "audio/wav" }), baseName + "-bass-boosted.wav");
+      status.textContent = "Export complete.";
+      if (decodeContext.close) decodeContext.close();
+    } catch (error) {
+      status.textContent = "This file could not be exported. Try MP3, WAV, M4A, or AAC.";
+    } finally {
+      exportButton.disabled = !selectedFile;
+      slider.disabled = false;
+      fileInput.disabled = false;
+    }
+  }
+
+  fileInput.addEventListener("change", function () {
+    var file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    selectedFile = file;
+    if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+    currentObjectUrl = URL.createObjectURL(file);
+    audio.src = currentObjectUrl;
+    audio.load();
+    exportButton.disabled = false;
+    status.textContent = file.name + " is ready.";
+  });
+
+  audio.addEventListener("play", ensureAudioGraph);
+  slider.addEventListener("input", updateAmount);
+  exportButton.addEventListener("click", exportBoostedAudio);
+  updateAmount();
+})();
+</script>
