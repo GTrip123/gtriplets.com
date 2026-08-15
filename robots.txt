@@ -1,4 +1,1 @@
-User-agent: *
-Disallow: /drafts/
-Disallow: /admin/
-Disallow: /wp/
+
