@@ -6,6 +6,8 @@ export async function onRequest(context) {
     .on("head", {
       element(element) {
         element.append(`
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4454994261105400"
+     crossorigin="anonymous"></script>
           <style>
            header {
           position: fixed !important;
