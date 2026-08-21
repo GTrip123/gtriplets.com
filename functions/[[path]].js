@@ -1,5 +1,19 @@
 export async function onRequest(context) {
   const response = await context.next();
+  export async function onRequest(context) {
+  const response = await context.next();
+
+  const url = new URL(context.request.url);
+  const pathname = url.pathname;
+
+  const isDriftBoss =
+    pathname === "/games/drift-boss" ||
+    pathname.startsWith("/games/drift-boss/");
+
+  if (isDriftBoss) {
+    return response;
+  }
+
 
   return new HTMLRewriter()
 
