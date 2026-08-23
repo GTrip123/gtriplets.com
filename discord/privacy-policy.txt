@@ -1,0 +1,14 @@
+1. Data Collection
+We do not collect any personal data from users permanently. Any data you provide during the use of our app or bot is used temporarily to facilitate the app’s functionality.
+2. Temporary Data Usage
+Information entered or generated during your session may be temporarily stored only for the purpose of improving your experience during that session. This data is deleted automatically after your session ends.
+3. No Permanent Storage
+We ensure that no personal information or conversation history is stored permanently under any circumstances, unless explicitly consented to by you.
+4. No Sharing With Third Parties
+We will not sell, rent, or share your data with any third parties. Your information stays private and secure within the app environment during active use.
+5. Security
+We employ standard security measures to protect temporary data from unauthorized access, but please note that no system can be 100% secure.
+6. Changes to This Policy
+Any updates to this privacy policy will be communicated clearly in the app. Continued use of the app indicates acceptance of the revised policy.
+7. Contact
+For any questions regarding this privacy policy, please contact gt@gtriplets.com.
