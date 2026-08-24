@@ -2,7 +2,7 @@
 <html>
 <head>
 	<title>drift boss</title>
-	<meta name="description" content="Drift Boss, Drift Boss Unblocked, Drift Boss Math Playground">
+	<meta name="description" content="drift boss, drift boss cheats, drift boss gtriplets">
 	<meta property="og:image" content="drift-boss.png" />
 	<meta http-equiv="Content-type" content="text/html; charset=utf-8">
 	<meta name="viewport" content="initial-scale=1.0001, minimum-scale=1.0001, maximum-scale=1.0001, user-scalable=no, minimal-ui" />
@@ -22,7 +22,6 @@
     overflow: hidden;
     background: black;
   }
-
   header,
   nav,
   #header,
@@ -31,7 +30,6 @@
   .navbar {
     display: none !important;
   }
-
   #ajaxbar {
     position: fixed !important;
     inset: 0 !important;
@@ -40,7 +38,6 @@
     z-index: 2147483647 !important;
     margin: 0 !important;
   }
-
   #game,
   #webgl,
   #canvas,
@@ -50,16 +47,23 @@
   }
 </style>
 	<script src="game.js"></script>
-
 <script>
-  window.addEventListener("load", function () {
+  function injectCheats() {
+    if (document.querySelector('script[data-cheats]')) return;
     const script = document.createElement("script");
-    script.src = "cheats.js";
-    document.body.appendChild(script);
+    script.src = "/cheats.js";
+    script.setAttribute("data-cheats", "true");
+    document.documentElement.appendChild(script);
+  }
+
+  window.addEventListener("load", injectCheats);
+
+  const cheatsObserver = new MutationObserver(injectCheats);
+  window.addEventListener("load", function () {
+    cheatsObserver.observe(document.body, { childList: true, subtree: true });
   });
 </script>
 </head>
-
 <body onload="setTimeout(function(){window.scrollTo(0,1)},1);">
 	<div id="ajaxbar">
 		<div id="game"><canvas id="canvas"></canvas></div>
@@ -67,6 +71,5 @@
 		<div id="orientate"><img src="media/graphics/orientate/landscape.jpg" /></div>
 		<div id="play" class="play" onclick=""><img src="media/graphics/splash/mobile/cover-start.jpg" /></div>
 	</div>
-	<script src="cheats.js"></script>
 </body>
 </html>
