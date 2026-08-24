@@ -1,5 +1,5 @@
 // Wait for DOM to be fully loaded
-document.addEventListener('DOMContentLoaded', function() {
+(function() {
     // Create and style the tab container
     const tabContainer = document.createElement('div');
     tabContainer.style.position = 'fixed';
@@ -152,4 +152,4 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add the container to the document
     document.body.appendChild(tabContainer);
-});
+})();
