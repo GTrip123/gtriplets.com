@@ -380,35 +380,60 @@
                     'lookahead=', JSON.stringify(lookahead));
             }
 
-            if (!turnTile) {
+            // Find the full contiguous turn CLUSTER ahead - from the first
+            // tile whose cross differs from the current lane, through every
+            // subsequent tile that keeps changing cross (a multi-tile sweep
+            // counts as one cluster), stopping at the tile where cross
+            // stabilizes again (back to a straight stretch). Using the LAST
+            // tile of the cluster as the hold target - instead of tracking
+            // "have we arrived" turn-by-turn - avoids the release/re-trigger
+            // oscillation near a turn's midpoint that caused overshoot.
+            let clusterStart = null;
+            let clusterEnd = null;
+            let prevCross = anchorCross;
+            for (let i = 0; i < lookahead.length; i++) {
+                const t = orderedPath[anchorIdx + 1 + i];
+                if (!t) break;
+                const c = t[crossAxis];
+                if (Math.abs(c - prevCross) > 0.5) {
+                    if (clusterStart === null) clusterStart = t;
+                    clusterEnd = t;
+                    prevCross = c;
+                } else if (clusterStart !== null) {
+                    break; // cross stabilized again - cluster is done
+                }
+            }
+
+            if (debugOn) {
+                console.log('[AutoBot] carPos=', carPos.x.toFixed(1), carPos.y.toFixed(1), carPos.z.toFixed(1),
+                    'active=' + active.length, 'anchorCross=' + anchorCross.toFixed(1),
+                    'clusterStart=' + (clusterStart ? clusterStart.platformId : 'none'),
+                    'clusterEnd=' + (clusterEnd ? clusterEnd.platformId : 'none'));
+            }
+
+            if (!clusterStart) {
                 if (botHolding) {
                     sendSpaceKey('keyup');
                     botHolding = false;
                 }
-                lastTurnTargetCross = null;
                 return;
             }
 
-            const distToTurn = Math.abs(turnTile[primaryAxis] - carPos[primaryAxis]);
+            const distToStart = Math.abs(clusterStart[primaryAxis] - carPos[primaryAxis]);
+            const distToEnd = clusterEnd[primaryAxis] - carPos[primaryAxis]; // sign matters here
             const reactionDist = parseFloat(reactionInput.value) || 60;
 
-            // Once we commit to a turn, remember its target cross-axis value
-            // and keep holding until the car has actually ARRIVED there -
-            // not just until distance-based detection stops finding it. Wide
-            // multi-tile sweeps need sustained holding through the whole
-            // turn, not just a trigger at the start.
-            if (distToTurn < reactionDist) {
-                lastTurnTargetCross = turnTile[crossAxis];
-            }
+            // Hold once within reactionDist of the cluster start, keep
+            // holding until we've actually passed the cluster end (car's
+            // primary position has gone beyond it in the travel direction).
+            const passedEnd = (carPos[primaryAxis] - clusterEnd[primaryAxis]) * Math.sign(carPos[primaryAxis] - (orderedPath[anchorIdx][primaryAxis] || carPos[primaryAxis]) + 0.0001) >= 0
+                ? Math.abs(distToEnd) < 1 || (clusterEnd[primaryAxis] < carPos[primaryAxis]) === (clusterEnd[primaryAxis] < clusterStart[primaryAxis])
+                : false;
+            const carPastClusterEnd = Math.sign(clusterEnd[primaryAxis] - clusterStart[primaryAxis] || -1) < 0
+                ? carPos[primaryAxis] <= clusterEnd[primaryAxis]
+                : carPos[primaryAxis] >= clusterEnd[primaryAxis];
 
-            let shouldHold;
-            if (lastTurnTargetCross !== null) {
-                const remainingCross = Math.abs(carPos[crossAxis] - lastTurnTargetCross);
-                shouldHold = remainingCross > 5; // keep holding until arrived at target lane
-                if (!shouldHold) lastTurnTargetCross = null; // arrived - clear for next turn
-            } else {
-                shouldHold = distToTurn < reactionDist;
-            }
+            const shouldHold = distToStart < reactionDist && !carPastClusterEnd;
 
             if (shouldHold && !botHolding) {
                 sendSpaceKey('keydown');
@@ -419,10 +444,9 @@
             }
 
             if (debugOn) {
-                console.log('[AutoBot] decision', 'dir=' + dir, 'distToTurn=' + distToTurn.toFixed(1),
-                    'turnTileId=' + turnTile.platformId,
-                    'targetCross=' + (lastTurnTargetCross !== null ? lastTurnTargetCross.toFixed(1) : 'none'),
-                    'carCross=' + carPos[crossAxis].toFixed(1), 'holding=' + botHolding);
+                console.log('[AutoBot] decision', 'dir=' + dir, 'distToStart=' + distToStart.toFixed(1),
+                    'clusterEndId=' + clusterEnd.platformId, 'carPastClusterEnd=' + carPastClusterEnd,
+                    'holding=' + botHolding);
             }
         } catch (e) {
             console.warn('[AutoBot] tick error', e);
