@@ -31,6 +31,9 @@
     contentPanel.style.padding = '15px';
     contentPanel.style.borderRadius = '5px 0 0 5px';
     contentPanel.style.boxShadow = '-2px 2px 5px rgba(0,0,0,0.2)';
+    contentPanel.style.maxHeight = '85vh';
+    contentPanel.style.overflowY = 'auto';
+    contentPanel.style.width = '220px';
 
     // Add the title
     const title = document.createElement('h3');
@@ -46,36 +49,147 @@
     subtitle.style.color = '#666';
     contentPanel.appendChild(subtitle);
 
-    // Create and style the infinite coins button
-    const coinsButton = document.createElement('button');
-    coinsButton.textContent = 'Infinite Coins';
-    coinsButton.style.padding = '8px 15px';
-    coinsButton.style.backgroundColor = '#4CAF50';
-    coinsButton.style.color = 'white';
-    coinsButton.style.border = 'none';
-    coinsButton.style.borderRadius = '3px';
-    coinsButton.style.cursor = 'pointer';
-    coinsButton.style.width = '100%';
-    coinsButton.style.marginBottom = '10px';
+    const SAVE_KEY = 'mjs-drift-boss-game-v1.0.1-dailyreward';
 
-    // Add hover effect
-    coinsButton.onmouseover = () => coinsButton.style.backgroundColor = '#45a049';
-    coinsButton.onmouseout = () => coinsButton.style.backgroundColor = '#4CAF50';
+    // Helper: read/write the save file safely
+    function readSave() {
+        let stored = localStorage.getItem(SAVE_KEY);
+        return stored ? JSON.parse(stored) : null;
+    }
+    function writeSave(data) {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    }
 
-    // Add the infinite coins functionality
-    coinsButton.onclick = () => {
-        let storedData = localStorage.getItem('mjs-drift-boss-game-v1.0.1-dailyreward');
-        if (storedData) {
-            let parsedData = JSON.parse(storedData);  
-            parsedData.collectedCoin = 10000000000;
-            localStorage.setItem('mjs-drift-boss-game-v1.0.1-dailyreward', JSON.stringify(parsedData));
+    // Helper: build a standard action button (reused for every cheat below)
+    function makeButton(label, color, hoverColor, onClick) {
+        const btn = document.createElement('button');
+        btn.textContent = label;
+        btn.style.padding = '8px 15px';
+        btn.style.backgroundColor = color;
+        btn.style.color = 'white';
+        btn.style.border = 'none';
+        btn.style.borderRadius = '3px';
+        btn.style.cursor = 'pointer';
+        btn.style.width = '100%';
+        btn.style.marginBottom = '8px';
+        btn.onmouseover = () => btn.style.backgroundColor = hoverColor;
+        btn.onmouseout = () => btn.style.backgroundColor = color;
+        btn.onclick = onClick;
+        return btn;
+    }
+
+    // Helper: waits for the game's global `ig` object to exist before running fn.
+    // Needed for any "live" cheat (not just save-file edits), since cheats.js
+    // can finish loading before the game engine has initialized `window.ig`.
+    function whenGameReady(fn) {
+        if (window.ig && window.ig.game) {
+            fn(window.ig);
+        } else {
+            const iv = setInterval(() => {
+                if (window.ig && window.ig.game) {
+                    clearInterval(iv);
+                    fn(window.ig);
+                }
+            }, 200);
+        }
+    }
+
+    // ---------- Infinite Coins ----------
+    const coinsButton = makeButton('Infinite Coins', '#4CAF50', '#45a049', () => {
+        let data = readSave();
+        if (data) {
+            data.collectedCoin = 10000000000;
+            writeSave(data);
             alert('Coins added! Reload the page to see changes.');
         } else {
             alert('No saved data found. Play the game first!');
         }
-    };
-
+    });
     contentPanel.appendChild(coinsButton);
+
+    // ---------- Max Boosters (unlimited purchased booster charges) ----------
+    const boostersButton = makeButton('Max Boosters (x999)', '#4CAF50', '#45a049', () => {
+        let data = readSave();
+        if (data) {
+            data.booster1 = 999;
+            data.booster2 = 999;
+            data.booster3 = 999;
+            writeSave(data);
+            alert('Boosters maxed! Reload, then select boosters before starting a run as usual.');
+        } else {
+            alert('No saved data found. Play the game first!');
+        }
+    });
+    contentPanel.appendChild(boostersButton);
+
+    // ---------- God Mode: forces all 3 boosters active for the whole run ----------
+    // booster1Active = 2x score, booster2Active = auto-revive on fall,
+    // booster3Active = guaranteed coin every platform.
+    // This sets the LIVE flags directly, so it doesn't consume your booster
+    // inventory the way picking them from the menu does.
+    let godModeOn = false;
+    let godModeInterval = null;
+    const godModeButton = makeButton('God Mode: OFF', '#607d8b', '#546069', () => {
+        godModeOn = !godModeOn;
+        godModeButton.textContent = 'God Mode: ' + (godModeOn ? 'ON' : 'OFF');
+        godModeButton.style.backgroundColor = godModeOn ? '#e91e63' : '#607d8b';
+
+        if (godModeOn) {
+            whenGameReady((ig) => {
+                godModeInterval = setInterval(() => {
+                    ig.booster1Active = true; // 2x score
+                    ig.booster2Active = true; // auto-revive on fall
+                    ig.booster3Active = true; // coin on every platform
+                }, 300);
+            });
+        } else if (godModeInterval) {
+            clearInterval(godModeInterval);
+            godModeInterval = null;
+        }
+    });
+    contentPanel.appendChild(godModeButton);
+
+    // ---------- Speed Hack: scales the game's internal frame-time (clock.tick) ----------
+    // 1x = normal, 0.5x = slow motion, 2x = double speed. Affects the whole
+    // game loop (score rate, animations, spawn timing) since everything reads
+    // ig.system.tick each frame.
+    let speedPatched = false;
+    let speedMultiplier = 1;
+    const speedLabel = document.createElement('p');
+    speedLabel.textContent = 'Game Speed: 1x';
+    speedLabel.style.fontSize = '13px';
+    speedLabel.style.margin = '10px 0 5px 0';
+    speedLabel.style.fontWeight = 'bold';
+    contentPanel.appendChild(speedLabel);
+
+    function patchClockOnce(ig) {
+        if (speedPatched) return;
+        speedPatched = true;
+        const originalTick = ig.system.clock.tick.bind(ig.system.clock);
+        ig.system.clock.tick = function() {
+            return originalTick() * speedMultiplier;
+        };
+    }
+
+    function setSpeed(mult, label) {
+        speedMultiplier = mult;
+        speedLabel.textContent = 'Game Speed: ' + label;
+        whenGameReady(patchClockOnce);
+    }
+
+    const speedRow = document.createElement('div');
+    speedRow.style.display = 'flex';
+    speedRow.style.gap = '5px';
+    speedRow.style.marginBottom = '10px';
+
+    const slowBtn = makeButton('0.5x', '#ff9800', '#e68900', () => setSpeed(0.5, '0.5x (slow-mo)'));
+    const normalBtn = makeButton('1x', '#9e9e9e', '#8a8a8a', () => setSpeed(1, '1x (normal)'));
+    const fastBtn = makeButton('2x', '#ff9800', '#e68900', () => setSpeed(2, '2x (fast)'));
+    [slowBtn, normalBtn, fastBtn].forEach(b => {
+        b.style.marginBottom = '0';
+        speedRow.appendChild(b);
+    });
+    contentPanel.appendChild(speedRow);
 
     const cartitle = document.createElement('h4');
     cartitle.innerHTML = 'Change Car:';
@@ -106,7 +220,7 @@
         carContainer.style.left = '80px';
         carContainer.style.top = '80px';
         carContainer.style.transformOrigin = '20px 20px';
-        
+
         const angle = ((i - 8) * (360 / 20)) * (Math.PI / 180);
         const radius = 100;
         carContainer.style.transform = `rotate(${(i - 8) * (360 / 20)}deg) translate(${radius}px) rotate(-${(i - 8) * (360 / 20)}deg)`;
@@ -120,11 +234,10 @@
 
         carImg.onclick = (e) => {
             e.stopPropagation();
-            let storedData = localStorage.getItem('mjs-drift-boss-game-v1.0.1-dailyreward');
-            if (storedData) {
-                let parsedData = JSON.parse(storedData);
-                parsedData.currentCar = parseInt(e.target.dataset.carId);
-                localStorage.setItem('mjs-drift-boss-game-v1.0.1-dailyreward', JSON.stringify(parsedData));
+            let data = readSave();
+            if (data) {
+                data.currentCar = parseInt(e.target.dataset.carId);
+                writeSave(data);
                 alert('Car changed! Reload the page to see changes.');
             } else {
                 alert('No saved data found. Play the game first!');
@@ -134,8 +247,6 @@
         carContainer.appendChild(carImg);
         wheelContainer.appendChild(carContainer);
     }
-
-
 
     contentPanel.appendChild(wheelContainer);
 
