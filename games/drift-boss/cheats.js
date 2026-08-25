@@ -314,27 +314,32 @@
                 console.log('[AutoBot] scene exists=' + !!scene,
                     'carSkeleton exists=' + !!(scene && scene.carSkeleton),
                     'chassis exists=' + !!(scene && scene.carSkeleton && scene.carSkeleton.chassis),
-                    'platforms=' + (scene && scene.platforms ? scene.platforms.length : 'n/a'),
+                    'platformSkeletons=' + (scene && scene.platformSkeletons ? scene.platformSkeletons.length : 'n/a'),
                     'blockDirection=' + (scene && scene.blockDirection));
             }
 
             const car = scene && scene.carSkeleton;
-            if (!car || !car.chassis || !scene.platforms) {
-                if (debugOn) console.log('[AutoBot] bailing - missing scene/car/platforms');
+            if (!car || !car.chassis || !scene.platformSkeletons) {
+                if (debugOn) console.log('[AutoBot] bailing - missing scene/car/platformSkeletons');
                 return;
             }
 
             const carPos = car.chassis.position;
             const dir = scene.blockDirection; // 'left' or 'right' - current lane axis
 
-            // Find platforms ahead of the car, closest first.
-            const ahead = scene.platforms
-                .filter(p => p && p.skeleton)
+            // platformSkeletons is a recycled POOL - only entries with
+            // active===true and platformId ahead of the car's current one
+            // (larger z-progress / not yet passed) are real upcoming tiles.
+            // Each has plain x/y/z fields set directly by setPosition(),
+            // no need to go through .skeleton.position.
+            const ahead = scene.platformSkeletons
+                .filter(p => p && p.active)
                 .map(p => ({
                     p,
-                    dx: p.skeleton.position.x - carPos.x,
-                    dz: p.skeleton.position.z - carPos.z
+                    dx: p.x - carPos.x,
+                    dz: p.z - carPos.z
                 }))
+                .filter(o => Math.abs(o.dx) + Math.abs(o.dz) > 0.01) // ignore the tile under the car itself
                 .sort((a, b) => (a.dx * a.dx + a.dz * a.dz) - (b.dx * b.dx + b.dz * b.dz));
 
             if (debugOn) {
