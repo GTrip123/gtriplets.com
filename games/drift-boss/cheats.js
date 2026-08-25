@@ -325,9 +325,16 @@
             }
 
             const carPos = car.chassis.position;
-            const dir = scene.blockDirection; // 'left' = traveling along -z, 'right' = traveling along -x
-            const primaryAxis = dir === 'left' ? 'z' : 'x';
-            const crossAxis = dir === 'left' ? 'x' : 'z';
+            const dir = scene.blockDirection; // kept for logging only - does NOT determine travel axis
+            // Confirmed from live data: the car's forward travel axis is
+            // ALWAYS z (it steadily decreases every tick regardless of
+            // blockDirection), and the lateral/turn axis is ALWAYS x. The
+            // previous version swapped these based on blockDirection, which
+            // was wrong and caused false "turn ahead" detections on ordinary
+            // straight tiles - that's what caused the immediate swerve at
+            // the start of every run.
+            const primaryAxis = 'z';
+            const crossAxis = 'x';
 
             // Reconstruct the TRUE path order using platformId (a global
             // counter assigned at spawn time - reliable regardless of pool
