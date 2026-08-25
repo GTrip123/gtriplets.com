@@ -150,9 +150,8 @@
     contentPanel.appendChild(godModeButton);
 
     // ---------- Speed Hack: scales the game's internal frame-time (clock.tick) ----------
-    // 1x = normal, 0.5x = slow motion, 2x = double speed. Affects the whole
-    // game loop (score rate, animations, spawn timing) since everything reads
-    // ig.system.tick each frame.
+    // Affects the whole game loop (score rate, animations, spawn timing) since
+    // everything reads ig.system.tick each frame. Custom multiplier supported.
     let speedPatched = false;
     let speedMultiplier = 1;
     const speedLabel = document.createElement('p');
@@ -180,7 +179,7 @@
     const speedRow = document.createElement('div');
     speedRow.style.display = 'flex';
     speedRow.style.gap = '5px';
-    speedRow.style.marginBottom = '10px';
+    speedRow.style.marginBottom = '8px';
 
     const slowBtn = makeButton('0.5x', '#ff9800', '#e68900', () => setSpeed(0.5, '0.5x (slow-mo)'));
     const normalBtn = makeButton('1x', '#9e9e9e', '#8a8a8a', () => setSpeed(1, '1x (normal)'));
@@ -190,6 +189,193 @@
         speedRow.appendChild(b);
     });
     contentPanel.appendChild(speedRow);
+
+    // Custom speed input
+    const customSpeedRow = document.createElement('div');
+    customSpeedRow.style.display = 'flex';
+    customSpeedRow.style.gap = '5px';
+    customSpeedRow.style.marginBottom = '10px';
+
+    const customSpeedInput = document.createElement('input');
+    customSpeedInput.type = 'number';
+    customSpeedInput.step = '0.1';
+    customSpeedInput.min = '0.1';
+    customSpeedInput.max = '10';
+    customSpeedInput.value = '1';
+    customSpeedInput.placeholder = 'e.g. 0.3';
+    customSpeedInput.style.flex = '1';
+    customSpeedInput.style.padding = '6px';
+    customSpeedInput.style.border = '1px solid #ccc';
+    customSpeedInput.style.borderRadius = '3px';
+    customSpeedInput.style.width = '0'; // allows flex to shrink it properly
+
+    const customSpeedBtn = makeButton('Set', '#3f51b5', '#32408f', () => {
+        const val = parseFloat(customSpeedInput.value);
+        if (!isNaN(val) && val > 0) {
+            setSpeed(val, val + 'x (custom)');
+        } else {
+            alert('Enter a positive number, e.g. 0.3 or 1.5');
+        }
+    });
+    customSpeedBtn.style.width = 'auto';
+    customSpeedBtn.style.marginBottom = '0';
+    customSpeedBtn.style.paddingLeft = '12px';
+    customSpeedBtn.style.paddingRight = '12px';
+
+    customSpeedRow.appendChild(customSpeedInput);
+    customSpeedRow.appendChild(customSpeedBtn);
+    contentPanel.appendChild(customSpeedRow);
+
+    // ---------- Auto-Play Bot (heuristic) ----------
+    // Reads the live platform pool (ig.gameScene.platforms) to find tiles
+    // ahead of the car, detects when the upcoming platform's x/z axis differs
+    // from the current lane (i.e. the track is about to turn), and holds/
+    // releases a REAL simulated Space key based on distance to that turn.
+    // This is reverse-engineered from the game's obfuscated logic, not
+    // live-tested against actual gameplay - the REACTION_DISTANCE below is
+    // the main knob to tune if it's turning too early/late. Debug Log prints
+    // the values it's reacting to each cycle so you can tune it by watching
+    // the console, or paste that output back to me and I'll help calibrate.
+    let botOn = false;
+    let botInterval = null;
+    let botHolding = false;
+    let debugOn = false;
+
+    const botTitle = document.createElement('h4');
+    botTitle.innerHTML = 'Auto-Play Bot (beta):';
+    botTitle.style.margin = '10px 0 5px 0';
+    contentPanel.appendChild(botTitle);
+
+    const botConfigRow = document.createElement('div');
+    botConfigRow.style.display = 'flex';
+    botConfigRow.style.alignItems = 'center';
+    botConfigRow.style.gap = '5px';
+    botConfigRow.style.marginBottom = '8px';
+
+    const reactionLabel = document.createElement('label');
+    reactionLabel.textContent = 'Reaction dist:';
+    reactionLabel.style.fontSize = '12px';
+    reactionLabel.style.color = '#333';
+
+    const reactionInput = document.createElement('input');
+    reactionInput.type = 'number';
+    reactionInput.value = '40';
+    reactionInput.step = '5';
+    reactionInput.style.width = '55px';
+    reactionInput.style.padding = '4px';
+    reactionInput.style.border = '1px solid #ccc';
+    reactionInput.style.borderRadius = '3px';
+
+    botConfigRow.appendChild(reactionLabel);
+    botConfigRow.appendChild(reactionInput);
+    contentPanel.appendChild(botConfigRow);
+
+    // Simulates a real keyboard event so ig.input.state('space') picks it up
+    // the same way it would from an actual key press.
+    function sendSpaceKey(type) {
+        const evt = new KeyboardEvent(type, {
+            key: ' ',
+            code: 'Space',
+            keyCode: 32,
+            which: 32,
+            bubbles: true,
+            cancelable: true
+        });
+        window.dispatchEvent(evt);
+        document.dispatchEvent(evt);
+    }
+
+    function botTick(ig) {
+        try {
+            const scene = ig.gameScene;
+            const car = scene && scene.carSkeleton;
+            if (!car || !car.chassis || !scene.platforms) return;
+
+            const carPos = car.chassis.position;
+            const dir = scene.blockDirection; // 'left' or 'right' - current lane axis
+
+            // Find platforms ahead of the car, closest first.
+            const ahead = scene.platforms
+                .filter(p => p && p.skeleton && p.isVisible !== false)
+                .map(p => ({
+                    p,
+                    dx: p.skeleton.position.x - carPos.x,
+                    dz: p.skeleton.position.z - carPos.z
+                }))
+                .filter(o => o.dx > -5 && o.dz > -5) // roughly "in front"
+                .sort((a, b) => (a.dx * a.dx + a.dz * a.dz) - (b.dx * b.dx + b.dz * b.dz));
+
+            if (ahead.length === 0) return;
+
+            const nearest = ahead[0];
+            const dist = Math.sqrt(nearest.dx * nearest.dx + nearest.dz * nearest.dz);
+
+            // Heuristic: when blockDirection is 'left', the track is currently
+            // advancing along z; a meaningful x-offset on the nearest tile
+            // means a turn is coming up. Mirror logic for 'right' (advancing
+            // along x, watch for z-offset). Hold when close to that turn,
+            // release once past it.
+            const reactionDist = parseFloat(reactionInput.value) || 40;
+            let shouldHold;
+            if (dir === 'left') {
+                shouldHold = Math.abs(nearest.dx) > 2 && dist < reactionDist;
+            } else {
+                shouldHold = Math.abs(nearest.dz) > 2 && dist < reactionDist;
+            }
+
+            if (shouldHold && !botHolding) {
+                sendSpaceKey('keydown');
+                botHolding = true;
+            } else if (!shouldHold && botHolding) {
+                sendSpaceKey('keyup');
+                botHolding = false;
+            }
+
+            if (debugOn) {
+                console.log('[AutoBot]', 'dir=' + dir, 'dist=' + dist.toFixed(1),
+                    'dx=' + nearest.dx.toFixed(1), 'dz=' + nearest.dz.toFixed(1),
+                    'holding=' + botHolding);
+            }
+        } catch (e) {
+            if (debugOn) console.warn('[AutoBot] tick error', e);
+        }
+    }
+
+    const botButton = makeButton('Auto-Play: OFF', '#607d8b', '#546069', () => {
+        botOn = !botOn;
+        botButton.textContent = 'Auto-Play: ' + (botOn ? 'ON' : 'OFF');
+        botButton.style.backgroundColor = botOn ? '#e91e63' : '#607d8b';
+
+        if (botOn) {
+            whenGameReady((ig) => {
+                botInterval = setInterval(() => botTick(ig), 50);
+            });
+        } else {
+            if (botInterval) {
+                clearInterval(botInterval);
+                botInterval = null;
+            }
+            if (botHolding) {
+                sendSpaceKey('keyup');
+                botHolding = false;
+            }
+        }
+    });
+    contentPanel.appendChild(botButton);
+
+    const debugButton = makeButton('Debug Log: OFF', '#795548', '#6a4a3f', () => {
+        debugOn = !debugOn;
+        debugButton.textContent = 'Debug Log: ' + (debugOn ? 'ON' : 'OFF');
+        debugButton.style.backgroundColor = debugOn ? '#5d4037' : '#795548';
+    });
+    contentPanel.appendChild(debugButton);
+
+    const botNote = document.createElement('p');
+    botNote.textContent = 'Beta: reverse-engineered, not live-tested. If it turns too early/late, adjust "Reaction dist" up/down. Works best paired with 0.3x-0.5x speed above.';
+    botNote.style.fontSize = '11px';
+    botNote.style.color = '#666';
+    botNote.style.margin = '5px 0 10px 0';
+    contentPanel.appendChild(botNote);
 
     const cartitle = document.createElement('h4');
     cartitle.innerHTML = 'Change Car:';
