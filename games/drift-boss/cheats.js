@@ -278,7 +278,7 @@
 
     const reactionInput = document.createElement('input');
     reactionInput.type = 'number';
-    reactionInput.value = '40';
+    reactionInput.value = '60';
     reactionInput.step = '5';
     reactionInput.style.width = '55px';
     reactionInput.style.padding = '4px';
@@ -325,46 +325,50 @@
             }
 
             const carPos = car.chassis.position;
-            const dir = scene.blockDirection; // 'left' or 'right' - current lane axis
+            const dir = scene.blockDirection; // 'left' = traveling along -z, 'right' = traveling along -x
 
-            // platformSkeletons is a recycled POOL - only entries with
-            // active===true and platformId ahead of the car's current one
-            // (larger z-progress / not yet passed) are real upcoming tiles.
-            // Each has plain x/y/z fields set directly by setPosition(),
-            // no need to go through .skeleton.position.
-            const ahead = scene.platformSkeletons
+            // Only consider platforms actually AHEAD of the car (not yet
+            // reached), using the correct travel axis for the current
+            // direction. Previously this picked the nearest tile in ANY
+            // direction, which could be one already passed.
+            const primaryAxis = dir === 'left' ? 'z' : 'x';
+            const crossAxis = dir === 'left' ? 'x' : 'z';
+
+            const aheadTiles = scene.platformSkeletons
                 .filter(p => p && p.active)
                 .map(p => ({
                     p,
-                    dx: p.x - carPos.x,
-                    dz: p.z - carPos.z
+                    primaryDelta: p[primaryAxis] - carPos[primaryAxis], // should be negative = ahead
+                    crossDelta: p[crossAxis] - carPos[crossAxis]
                 }))
-                .filter(o => Math.abs(o.dx) + Math.abs(o.dz) > 0.01) // ignore the tile under the car itself
-                .sort((a, b) => (a.dx * a.dx + a.dz * a.dz) - (b.dx * b.dx + b.dz * b.dz));
+                .filter(o => o.primaryDelta < -0.5) // strictly ahead on the travel axis
+                .sort((a, b) => b.primaryDelta - a.primaryDelta); // closest ahead first (least negative)
 
             if (debugOn) {
                 console.log('[AutoBot] carPos=', carPos.x.toFixed(1), carPos.y.toFixed(1), carPos.z.toFixed(1),
-                    'candidateTiles=' + ahead.length,
-                    ahead[0] ? ('nearest dx=' + ahead[0].dx.toFixed(1) + ' dz=' + ahead[0].dz.toFixed(1)) : '');
+                    'aheadTiles=' + aheadTiles.length,
+                    aheadTiles[0] ? ('nearest primaryDelta=' + aheadTiles[0].primaryDelta.toFixed(1) +
+                        ' crossDelta=' + aheadTiles[0].crossDelta.toFixed(1)) : '');
             }
 
-            if (ahead.length === 0) return;
+            if (aheadTiles.length === 0) return;
 
-            const nearest = ahead[0];
-            const dist = Math.sqrt(nearest.dx * nearest.dx + nearest.dz * nearest.dz);
-
-            // Heuristic: when blockDirection is 'left', the track is currently
-            // advancing along z; a meaningful x-offset on the nearest tile
-            // means a turn is coming up. Mirror logic for 'right' (advancing
-            // along x, watch for z-offset). Hold when close to that turn,
-            // release once past it.
-            const reactionDist = parseFloat(reactionInput.value) || 40;
-            let shouldHold;
-            if (dir === 'left') {
-                shouldHold = Math.abs(nearest.dx) > 2 && dist < reactionDist;
-            } else {
-                shouldHold = Math.abs(nearest.dz) > 2 && dist < reactionDist;
+            // Find the first ahead tile whose cross-axis position differs
+            // meaningfully from the car's current lane - that tile marks
+            // where the track turns.
+            const turnTile = aheadTiles.find(o => Math.abs(o.crossDelta) > 5);
+            if (!turnTile) {
+                // No turn detected in range - release and keep straight.
+                if (botHolding) {
+                    sendSpaceKey('keyup');
+                    botHolding = false;
+                }
+                return;
             }
+
+            const distToTurn = Math.abs(turnTile.primaryDelta);
+            const reactionDist = parseFloat(reactionInput.value) || 60;
+            const shouldHold = distToTurn < reactionDist;
 
             if (shouldHold && !botHolding) {
                 sendSpaceKey('keydown');
@@ -375,9 +379,8 @@
             }
 
             if (debugOn) {
-                console.log('[AutoBot] decision', 'dir=' + dir, 'dist=' + dist.toFixed(1),
-                    'dx=' + nearest.dx.toFixed(1), 'dz=' + nearest.dz.toFixed(1),
-                    'holding=' + botHolding);
+                console.log('[AutoBot] decision', 'dir=' + dir, 'distToTurn=' + distToTurn.toFixed(1),
+                    'crossDelta=' + turnTile.crossDelta.toFixed(1), 'holding=' + botHolding);
             }
         } catch (e) {
             console.warn('[AutoBot] tick error', e);
