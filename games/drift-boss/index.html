@@ -50,12 +50,22 @@
   }
 </style>
 	<script src="game.js"></script>
-<script>
+<script type="text/javascript">
+  let cheatsInjected = false;
+
   function injectCheats() {
-    if (document.querySelector('script[data-cheats]')) return;
+    if (cheatsInjected) return;
+    cheatsInjected = true;
+
     const script = document.createElement("script");
-    script.src = "/cheats.js";
-    script.setAttribute("data-cheats", "true");
+    script.src = "cheats.js"; // relative - loads from this game's own folder
+    script.onload = function () {
+      cheatsObserver.disconnect();
+    };
+    script.onerror = function () {
+      console.error("cheats.js failed to load");
+      cheatsInjected = false; // allow retry if it genuinely failed
+    };
     document.documentElement.appendChild(script);
   }
 
