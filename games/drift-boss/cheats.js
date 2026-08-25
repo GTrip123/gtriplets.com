@@ -161,19 +161,38 @@
     speedLabel.style.fontWeight = 'bold';
     contentPanel.appendChild(speedLabel);
 
-    function patchClockOnce(ig) {
+    // NOTE: this game runs two separate clocks - ig.system.clock (only
+    // drives the score counter) and BabylonJS's own engine.getDeltaTime()
+    // under a separate `wgl` global (drives actual physics/rendering).
+    // We need to patch the real engine clock for gameplay to actually speed
+    // up/slow down, not just the score number.
+    function whenEngineReady(fn) {
+        if (window.wgl && window.wgl.system && window.wgl.system.engine) {
+            fn(window.wgl.system.engine);
+        } else {
+            const iv = setInterval(() => {
+                if (window.wgl && window.wgl.system && window.wgl.system.engine) {
+                    clearInterval(iv);
+                    fn(window.wgl.system.engine);
+                }
+            }, 200);
+        }
+    }
+
+    function patchClockOnce(engine) {
         if (speedPatched) return;
         speedPatched = true;
-        const originalTick = ig.system.clock.tick.bind(ig.system.clock);
-        ig.system.clock.tick = function() {
-            return originalTick() * speedMultiplier;
+        const originalGetDeltaTime = engine.getDeltaTime.bind(engine);
+        engine.getDeltaTime = function() {
+            return originalGetDeltaTime() * speedMultiplier;
         };
+        console.log('[SpeedHack] Patched wgl.system.engine.getDeltaTime');
     }
 
     function setSpeed(mult, label) {
         speedMultiplier = mult;
         speedLabel.textContent = 'Game Speed: ' + label;
-        whenGameReady(patchClockOnce);
+        whenEngineReady(patchClockOnce);
     }
 
     const speedRow = document.createElement('div');
@@ -288,22 +307,41 @@
     function botTick(ig) {
         try {
             const scene = ig.gameScene;
+
+            // Diagnostic dump FIRST, before any early exit, so we can see
+            // exactly what's missing/wrong if this isn't working.
+            if (debugOn) {
+                console.log('[AutoBot] scene exists=' + !!scene,
+                    'carSkeleton exists=' + !!(scene && scene.carSkeleton),
+                    'chassis exists=' + !!(scene && scene.carSkeleton && scene.carSkeleton.chassis),
+                    'platforms=' + (scene && scene.platforms ? scene.platforms.length : 'n/a'),
+                    'blockDirection=' + (scene && scene.blockDirection));
+            }
+
             const car = scene && scene.carSkeleton;
-            if (!car || !car.chassis || !scene.platforms) return;
+            if (!car || !car.chassis || !scene.platforms) {
+                if (debugOn) console.log('[AutoBot] bailing - missing scene/car/platforms');
+                return;
+            }
 
             const carPos = car.chassis.position;
             const dir = scene.blockDirection; // 'left' or 'right' - current lane axis
 
             // Find platforms ahead of the car, closest first.
             const ahead = scene.platforms
-                .filter(p => p && p.skeleton && p.isVisible !== false)
+                .filter(p => p && p.skeleton)
                 .map(p => ({
                     p,
                     dx: p.skeleton.position.x - carPos.x,
                     dz: p.skeleton.position.z - carPos.z
                 }))
-                .filter(o => o.dx > -5 && o.dz > -5) // roughly "in front"
                 .sort((a, b) => (a.dx * a.dx + a.dz * a.dz) - (b.dx * b.dx + b.dz * b.dz));
+
+            if (debugOn) {
+                console.log('[AutoBot] carPos=', carPos.x.toFixed(1), carPos.y.toFixed(1), carPos.z.toFixed(1),
+                    'candidateTiles=' + ahead.length,
+                    ahead[0] ? ('nearest dx=' + ahead[0].dx.toFixed(1) + ' dz=' + ahead[0].dz.toFixed(1)) : '');
+            }
 
             if (ahead.length === 0) return;
 
@@ -332,12 +370,12 @@
             }
 
             if (debugOn) {
-                console.log('[AutoBot]', 'dir=' + dir, 'dist=' + dist.toFixed(1),
+                console.log('[AutoBot] decision', 'dir=' + dir, 'dist=' + dist.toFixed(1),
                     'dx=' + nearest.dx.toFixed(1), 'dz=' + nearest.dz.toFixed(1),
                     'holding=' + botHolding);
             }
         } catch (e) {
-            if (debugOn) console.warn('[AutoBot] tick error', e);
+            console.warn('[AutoBot] tick error', e);
         }
     }
 
