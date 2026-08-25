@@ -258,6 +258,7 @@
     let botOn = false;
     let botInterval = null;
     let botHolding = false;
+    let lastTurnTargetCross = null;
     let debugOn = false;
 
     const botTitle = document.createElement('h4');
@@ -384,12 +385,30 @@
                     sendSpaceKey('keyup');
                     botHolding = false;
                 }
+                lastTurnTargetCross = null;
                 return;
             }
 
             const distToTurn = Math.abs(turnTile[primaryAxis] - carPos[primaryAxis]);
             const reactionDist = parseFloat(reactionInput.value) || 60;
-            const shouldHold = distToTurn < reactionDist;
+
+            // Once we commit to a turn, remember its target cross-axis value
+            // and keep holding until the car has actually ARRIVED there -
+            // not just until distance-based detection stops finding it. Wide
+            // multi-tile sweeps need sustained holding through the whole
+            // turn, not just a trigger at the start.
+            if (distToTurn < reactionDist) {
+                lastTurnTargetCross = turnTile[crossAxis];
+            }
+
+            let shouldHold;
+            if (lastTurnTargetCross !== null) {
+                const remainingCross = Math.abs(carPos[crossAxis] - lastTurnTargetCross);
+                shouldHold = remainingCross > 5; // keep holding until arrived at target lane
+                if (!shouldHold) lastTurnTargetCross = null; // arrived - clear for next turn
+            } else {
+                shouldHold = distToTurn < reactionDist;
+            }
 
             if (shouldHold && !botHolding) {
                 sendSpaceKey('keydown');
@@ -401,7 +420,9 @@
 
             if (debugOn) {
                 console.log('[AutoBot] decision', 'dir=' + dir, 'distToTurn=' + distToTurn.toFixed(1),
-                    'turnTileId=' + turnTile.platformId, 'holding=' + botHolding);
+                    'turnTileId=' + turnTile.platformId,
+                    'targetCross=' + (lastTurnTargetCross !== null ? lastTurnTargetCross.toFixed(1) : 'none'),
+                    'carCross=' + carPos[crossAxis].toFixed(1), 'holding=' + botHolding);
             }
         } catch (e) {
             console.warn('[AutoBot] tick error', e);
@@ -426,6 +447,7 @@
                 sendSpaceKey('keyup');
                 botHolding = false;
             }
+            lastTurnTargetCross = null;
         }
     });
     contentPanel.appendChild(botButton);
