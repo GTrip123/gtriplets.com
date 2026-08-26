@@ -95,6 +95,30 @@ export async function onRequest(context) {
               padding-top: 60px;
               padding-bottom: 70px;
             }
+            <style>
+            .nav-link {
+            position: relative;
+            padding-bottom: 8px;
+            text-decoration: none;
+            color: inherit;
+              }
+  .nav-link.active::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background-color: lightblue;
+  }
+
+<script>
+  document.querySelectorAll('.nav-link').forEach(link => {
+    if (link.getAttribute('href') === window.location.pathname) {
+      link.classList.add('active');
+    }
+  });
+</script>
           </style>
         `, { html: true });
       }
