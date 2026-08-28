@@ -101,15 +101,6 @@ export async function onRequest(context) {
             text-decoration: none;
             color: inherit;
               }
-            .nav-link.active::after {
-            content: "";
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background-color: lightblue;
-            }
           </style>
         `, { html: true });
       }
