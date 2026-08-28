@@ -6,7 +6,6 @@
   <title>gtrip's site</title>
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4454994261105400"
      crossorigin="anonymous"></script>
-
   <style>
     * {
       margin: 0;
@@ -14,7 +13,6 @@
       box-sizing: border-box;
       font-family: Arial, Helvetica, sans-serif;
     }
-
   body {
   background: linear-gradient(
     -45deg,
@@ -23,10 +21,8 @@
     #7c3aed,
     #0ea5e9
   );
-
   background-size: 400% 400%;
   animation: gradientMove 15s ease infinite;
-
   min-height: 100vh;
   color: white;
   display: flex;
@@ -35,17 +31,13 @@
   height: 100vh;
   text-align: center;
 }
-
-
 @keyframes gradientMove {
   0% {
     background-position: 0% 50%;
   }
-
   50% {
     background-position: 100% 50%;
   }
-
   100% {
     background-position: 0% 50%;
   }
@@ -54,19 +46,16 @@
       max-width: 700px;
       padding: 20px;
     }
-
     h1 {
       font-size: 3rem;
       margin-bottom: 20px;
     }
-
     p {
       font-size: 1.2rem;
       line-height: 1.6;
       margin-bottom: 30px;
       opacity: 0.9;
     }
-
     .btn {
       display: inline-block;
       padding: 12px 28px;
@@ -77,26 +66,76 @@
       font-weight: bold;
       transition: 0.2s ease;
     }
-
     .btn:hover {
       transform: translateY(-3px);
       background: #f3f4f6;
     }
+    .status-line {
+      margin-top: 18px;
+      font-size: 0.95rem;
+      opacity: 0.85;
+    }
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      background: #9ca3af;
+      vertical-align: middle;
+    }
+    .status-dot.online {
+      background: #22c55e;
+      box-shadow: 0 0 6px #22c55e;
+    }
+    .status-dot.offline {
+      background: #ef4444;
+    }
   </style>
 </head>
-
 <body>
   <section class="hero">
     <h1>welcome to my website 👋</h1>
-
     <p>
       this website is a work in progress. expect things
       to be half-finished/not working
        <br><br>
         🎮 more games coming soon!
     </p>
-
     <a href="/updates" class="btn">see my latest updates to the site</a>
+
+    <div class="status-line">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="status">checking...</span>
+    </div>
   </section>
+
+  <script>
+    const STATUS_URL = "https://gtrip-status.gtripletsyt.workers.dev/status";
+    const NAME = "gtrip";
+    const CHECK_INTERVAL = 30000;
+
+    async function checkStatus() {
+      const statusEl = document.getElementById("status");
+      const dotEl = document.getElementById("statusDot");
+      try {
+        const res = await fetch(STATUS_URL);
+        const data = await res.json();
+        if (data.online) {
+          statusEl.textContent = `${NAME} is online`;
+          dotEl.className = "status-dot online";
+        } else {
+          statusEl.textContent = `${NAME} is offline`;
+          dotEl.className = "status-dot offline";
+        }
+      } catch (e) {
+        statusEl.textContent = `${NAME} is offline`;
+        dotEl.className = "status-dot offline";
+      }
+    }
+
+    checkStatus();
+    setInterval(checkStatus, CHECK_INTERVAL);
+  </script>
 </body>
 </html>
