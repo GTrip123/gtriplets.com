@@ -74,21 +74,28 @@
 <div class="games">
 
   <div class="card">
-    <img src="drift-boss/drift-boss.png" alt="Drift Boss">
+    <img src="drift-boss/drift-boss.png" alt="Drift Boss Image">
     <h2>drift boss</h2>
     <p>play drift boss online</p>
     <button class="play" onclick="openGame('drift')">play</button>
   </div>
 
   <div class="card">
-    <img src="assets/flappy-bird.png" alt="Flappy Bird">
+    <img src="assets/flappy-bird.png" alt="Flappy Bird Image">
     <h2>flappy bird</h2>
     <p>play flappy bird online </p>
     <button class="play" onclick="openGame('game2')">play</button>
   </div>
   
+   <div class="card">
+    <img src="assets/fnf.png" alt="FNF Image">
+    <h2>fnf</h2>
+    <p>play friday night funkin online </p>
+    <button class="play" onclick="openGame('fnf')">play</button>
+  </div>
+  
   <div class="card">
-    <img src="/404-video.mp4" alt="check back later">
+    <img src="/404-video.mp4" alt="404 Image">
     <h2>more stuff will be added soon! </h2>
     <p>check back later for more games! </p>
     <button class="play" onclick="openGame('game404')">play</button>
@@ -105,9 +112,9 @@ function openGame(game) {
       location: "https://gtriplets.com/games/drift-boss/"
     },
 
-    game2: {
-      type: "swf",
-      location: "game2.swf"
+    fnf: {
+      type: "link",
+      location: "https://gtriplets.com/games/fnf/"
     },
 
     game3: {
