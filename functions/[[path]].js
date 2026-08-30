@@ -87,7 +87,7 @@ export async function onRequest(context) {
               padding-bottom: 70px;
             }
           </style>
-          <script>
+          <script data-cfasync="false">
 document.addEventListener('DOMContentLoaded', () => {
   const normalize = (path) => path.length > 1 ? path.replace(/\/+$/, '') : path;
   const currentPath = normalize(window.location.pathname);
