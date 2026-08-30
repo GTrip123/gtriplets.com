@@ -32,30 +32,13 @@
   text-align: center;
 }
 @keyframes gradientMove {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
-    .hero {
-      max-width: 700px;
-      padding: 20px;
-    }
-    h1 {
-      font-size: 3rem;
-      margin-bottom: 20px;
-    }
-    p {
-      font-size: 1.2rem;
-      line-height: 1.6;
-      margin-bottom: 30px;
-      opacity: 0.9;
-    }
+    .hero { max-width: 700px; padding: 20px; }
+    h1 { font-size: 3rem; margin-bottom: 20px; }
+    p { font-size: 1.2rem; line-height: 1.6; margin-bottom: 30px; opacity: 0.9; }
     .btn {
       display: inline-block;
       padding: 12px 28px;
@@ -66,31 +49,75 @@
       font-weight: bold;
       transition: 0.2s ease;
     }
-    .btn:hover {
-      transform: translateY(-3px);
-      background: #f3f4f6;
-    }
-    .status-line {
+    .btn:hover { transform: translateY(-3px); background: #f3f4f6; }
+
+    /* status + presence dropdown */
+    .status-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       margin-top: 18px;
       font-size: 0.95rem;
-      opacity: 0.85;
+      opacity: 0.9;
     }
     .status-dot {
       display: inline-block;
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      margin-right: 6px;
       background: #9ca3af;
-      vertical-align: middle;
     }
-    .status-dot.online {
-      background: #22c55e;
-      box-shadow: 0 0 6px #22c55e;
+    .status-dot.online { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+    .status-dot.offline { background: #ef4444; }
+
+    .presence-toggle {
+      background: none;
+      border: none;
+      color: white;
+      opacity: 0.75;
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 2px 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
     }
-    .status-dot.offline {
-      background: #ef4444;
+    .presence-toggle:hover { opacity: 1; }
+    .presence-toggle .chevron {
+      display: inline-block;
+      transition: transform 0.15s ease;
+      font-size: 0.7rem;
     }
+    .presence-toggle.open .chevron { transform: rotate(180deg); }
+
+    .presence-panel {
+      position: absolute;
+      top: 130%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      padding: 12px 16px;
+      min-width: 220px;
+      font-size: 0.85rem;
+      text-align: left;
+      display: none;
+      z-index: 10;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+    }
+    .presence-panel.show { display: block; }
+    .presence-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .presence-row:last-child { margin-bottom: 0; }
+    .discord-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .discord-status-dot.online { background: #23a55a; }
+    .discord-status-dot.idle { background: #f0b232; }
+    .discord-status-dot.dnd { background: #f23f43; }
+    .discord-status-dot.offline { background: #80848e; }
+    .presence-label { opacity: 0.7; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .presence-activity { font-weight: bold; }
+    .presence-detail { opacity: 0.8; font-size: 0.8rem; }
   </style>
 </head>
 <body>
@@ -104,14 +131,26 @@
     </p>
     <a href="/updates" class="btn">see my latest updates to the site</a>
 
-    <div class="status-line">
+    <div class="status-wrap">
       <span class="status-dot" id="statusDot"></span>
       <span id="status">checking...</span>
+      <button class="presence-toggle" id="presenceToggle">
+        what am I doing <span class="chevron">▾</span>
+      </button>
+
+      <div class="presence-panel" id="presencePanel">
+        <div class="presence-row">
+          <span class="discord-status-dot offline" id="discordDot"></span>
+          <span id="discordStatusText">loading…</span>
+        </div>
+        <div id="discordActivity"></div>
+      </div>
     </div>
   </section>
 
   <script>
-    const STATUS_URL = "https://gtrip-status.gtripletsyt.workers.dev/status";
+    // ===== Computer online/offline (Cloudflare Worker heartbeat) =====
+    const STATUS_URL = "https://gtrip-status.yourusername.workers.dev/status";
     const NAME = "gtrip";
     const CHECK_INTERVAL = 30000;
 
@@ -133,9 +172,94 @@
         dotEl.className = "status-dot offline";
       }
     }
-
     checkStatus();
     setInterval(checkStatus, CHECK_INTERVAL);
+
+    // ===== Discord presence (via Lanyard) =====
+    const DISCORD_USER_ID = "914563340234280970"; // <-- put your Discord user ID here
+    const LANYARD_URL = `https://api.lanyard.rest/v1/users/${DISCORD_USER_ID}`;
+
+    async function fetchPresence() {
+      const dot = document.getElementById("discordDot");
+      const statusText = document.getElementById("discordStatusText");
+      const activityEl = document.getElementById("discordActivity");
+
+      try {
+        const res = await fetch(LANYARD_URL);
+        const json = await res.json();
+        if (!json.success) throw new Error("lanyard request failed");
+        const data = json.data;
+
+        const discordStatus = data.discord_status || "offline";
+        dot.className = `discord-status-dot ${discordStatus}`;
+        statusText.textContent = {
+          online: "Online",
+          idle: "Idle",
+          dnd: "Do Not Disturb",
+          offline: "Offline"
+        }[discordStatus] || "Unknown";
+
+        const activities = (data.activities || []).filter(a => a.type !== 4);
+        activityEl.innerHTML = "";
+
+        if (data.listening_to_spotify && data.spotify) {
+          const row = document.createElement("div");
+          row.className = "presence-row";
+          row.innerHTML = `<span class="presence-label">Listening</span>`;
+          const detail = document.createElement("div");
+          detail.className = "presence-detail";
+          detail.textContent = `🎵 ${data.spotify.song} — ${data.spotify.artist}`;
+          activityEl.appendChild(row);
+          activityEl.appendChild(detail);
+        } else if (activities.length > 0) {
+          const act = activities[0];
+          const row = document.createElement("div");
+          row.className = "presence-row";
+          row.innerHTML = `<span class="presence-label">${act.type === 0 ? "Playing" : "Doing"}</span>`;
+          const detail = document.createElement("div");
+          detail.className = "presence-activity";
+          detail.textContent = act.name;
+          activityEl.appendChild(row);
+          activityEl.appendChild(detail);
+          if (act.details) {
+            const sub = document.createElement("div");
+            sub.className = "presence-detail";
+            sub.textContent = act.details;
+            activityEl.appendChild(sub);
+          }
+        } else {
+          const row = document.createElement("div");
+          row.className = "presence-detail";
+          row.textContent = "Not doing anything in particular";
+          activityEl.appendChild(row);
+        }
+      } catch (e) {
+        statusText.textContent = "Couldn't load presence";
+        dot.className = "discord-status-dot offline";
+        activityEl.innerHTML = "";
+      }
+    }
+
+    const toggleBtn = document.getElementById("presenceToggle");
+    const panel = document.getElementById("presencePanel");
+    let panelOpen = false;
+
+    toggleBtn.addEventListener("click", () => {
+      panelOpen = !panelOpen;
+      panel.classList.toggle("show", panelOpen);
+      toggleBtn.classList.toggle("open", panelOpen);
+      if (panelOpen) fetchPresence();
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".status-wrap") && panelOpen) {
+        panelOpen = false;
+        panel.classList.remove("show");
+        toggleBtn.classList.remove("open");
+      }
+    });
+
+    setInterval(() => { if (panelOpen) fetchPresence(); }, CHECK_INTERVAL);
   </script>
 </body>
 </html>
