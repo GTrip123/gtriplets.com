@@ -58,7 +58,7 @@ export async function onRequest(context) {
               left: 0;
               width: 100%;
               height: 3px;
-              background-color: lightblue;
+              background-color: blue;
             }
             #secret {
             display: none;
@@ -89,8 +89,12 @@ export async function onRequest(context) {
           </style>
           <script>
 document.addEventListener('DOMContentLoaded', () => {
+  const normalize = (path) => path.length > 1 ? path.replace(/\/+$/, '') : path;
+  const currentPath = normalize(window.location.pathname);
+
   document.querySelectorAll('header nav a').forEach(link => {
-    if (link.getAttribute('href') === window.location.pathname) {
+    const linkPath = normalize(link.getAttribute('href'));
+    if (linkPath === currentPath) {
       link.classList.add('active');
     }
   });
