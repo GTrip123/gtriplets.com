@@ -87,15 +87,13 @@ export async function onRequest(context) {
               padding-bottom: 70px;
             }
           </style>
-          <script data-cfasync="false">
+         <script data-cfasync="false">
 document.addEventListener('DOMContentLoaded', () => {
   const normalize = (path) => path.length > 1 ? path.replace(/\/+$/, '') : path;
   const currentPath = normalize(window.location.pathname);
-  console.log('normalized current path:', currentPath);
 
   document.querySelectorAll('header nav a').forEach(link => {
     const linkPath = normalize(link.getAttribute('href'));
-    console.log('checking link:', linkPath, 'match?', linkPath === currentPath);
     if (linkPath === currentPath) {
       link.classList.add('active');
     }
