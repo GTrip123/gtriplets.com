@@ -1,20 +1,14 @@
 export async function onRequest(context) {
   const response = await context.next();
-
   const url = new URL(context.request.url);
   const pathname = url.pathname;
-
   const isDriftBoss =
     pathname === "/games/drift-boss" ||
     pathname.startsWith("/games/drift-boss/");
-
   if (isDriftBoss) {
     return response;
   }
-
-
   return new HTMLRewriter()
-
     .on("head", {
       element(element) {
         element.append(`
@@ -26,53 +20,52 @@ export async function onRequest(context) {
   top: 0 !important;
   left: 0 !important;
   right: 0 !important;
-
   height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   padding: 0 30px;
   box-sizing: border-box;
-
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-
   color: white;
   font-family: Arial, sans-serif;
-
   z-index: 999999;
 }
-
             header .logo {
               color: white;
               text-decoration: none;
               font-size: 20px;
               font-weight: bold;
             }
-
             header nav {
               display: flex;
               gap: 20px;
             }
-
             header nav a {
               color: #9ca3af;
               text-decoration: none;
               font-size: 14px;
+              position: relative;
+              padding-bottom: 8px;
+            }
+            header nav a.active::after {
+              content: "";
+              position: absolute;
+              bottom: -8px;
+              left: 0;
+              width: 100%;
+              height: 3px;
+              background-color: lightblue;
             }
             #secret {
             display: none;
             }  
-
             header nav a:hover {
               color: white;
             }
-
-
             /* FOOTER */
             footer {
               position: fixed;
@@ -88,26 +81,24 @@ export async function onRequest(context) {
               z-index: 9999;
               box-sizing: border-box;
             }
-
-
             /* Keep content away from fixed elements */
             body {
               padding-top: 60px;
               padding-bottom: 70px;
             }
-            .nav-link {
-            position: relative;
-            padding-bottom: 8px;
-            text-decoration: none;
-            color: inherit;
-              }
           </style>
+          <script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('header nav a').forEach(link => {
+    if (link.getAttribute('href') === window.location.pathname) {
+      link.classList.add('active');
+    }
+  });
+});
+</script>
         `, { html: true });
       }
     })
-
-
-
     .on("body", {
       element(element) {
         element.prepend(`
@@ -115,7 +106,6 @@ export async function onRequest(context) {
             <a href="/" class="logo">
               g triplets
             </a>
-
             <nav>
               <a href="/">home</a>
               <a href="/about">about</a>
@@ -125,8 +115,6 @@ export async function onRequest(context) {
             </nav>
           </header>
         `, { html: true });
-
-
         element.append(`
           <footer>
             <a href="/" class="home-button">
@@ -138,6 +126,5 @@ export async function onRequest(context) {
         `, { html: true });
       }
     })
-
     .transform(response);
 }
