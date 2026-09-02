@@ -5,7 +5,13 @@ export async function onRequest(context) {
   const isDriftBoss =
     pathname === "/games/drift-boss" ||
     pathname.startsWith("/games/drift-boss/");
+  const isGD =
+    pathname === "/games/gd" ||
+    pathname.startsWith("/games/gd/");
   if (isDriftBoss) {
+    return response;
+  }
+   if (isGD) {
     return response;
   }
   return new HTMLRewriter()
