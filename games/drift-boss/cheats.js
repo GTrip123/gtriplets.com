@@ -490,8 +490,146 @@
     botNote.style.margin = '5px 0 10px 0';
     contentPanel.appendChild(botNote);
 
-    const cartitle = document.createElement('h4');
-    cartitle.innerHTML = 'Change Car:';
+    // ---------- Custom Score / Score Multiplier ----------
+    const scoreTitle = document.createElement('h4');
+    scoreTitle.innerHTML = 'Score:';
+    scoreTitle.style.margin = '10px 0 5px 0';
+    contentPanel.appendChild(scoreTitle);
+
+    const scoreSetRow = document.createElement('div');
+    scoreSetRow.style.display = 'flex';
+    scoreSetRow.style.gap = '5px';
+    scoreSetRow.style.marginBottom = '8px';
+
+    const scoreInput = document.createElement('input');
+    scoreInput.type = 'number';
+    scoreInput.placeholder = 'e.g. 5000';
+    scoreInput.style.flex = '1';
+    scoreInput.style.padding = '6px';
+    scoreInput.style.border = '1px solid #ccc';
+    scoreInput.style.borderRadius = '3px';
+    scoreInput.style.width = '0';
+
+    const scoreSetBtn = makeButton('Set Score', '#3f51b5', '#32408f', () => {
+        const val = parseFloat(scoreInput.value);
+        if (isNaN(val)) {
+            alert('Enter a number, e.g. 5000');
+            return;
+        }
+        whenGameReady((ig) => {
+            // ig.game.lastScore is the live in-run score. If not mid-run yet,
+            // this still sets it so it applies as soon as a run starts.
+            if (ig.game) ig.game.lastScore = val;
+            if (ig.currentGame) ig.currentGame.lastScore = val;
+        });
+    });
+    scoreSetBtn.style.width = 'auto';
+    scoreSetBtn.style.marginBottom = '0';
+    scoreSetBtn.style.paddingLeft = '10px';
+    scoreSetBtn.style.paddingRight = '10px';
+
+    scoreSetRow.appendChild(scoreInput);
+    scoreSetRow.appendChild(scoreSetBtn);
+    contentPanel.appendChild(scoreSetRow);
+
+    // Score multiplier: rather than guessing the internal increment formula,
+    // watch lastScore each tick and add extra on top of whatever it just
+    // gained, scaled to the requested multiplier. Works regardless of how
+    // the game itself computes the base increment.
+    let scoreMultOn = false;
+    let scoreMultInterval = null;
+    let lastKnownScore = null;
+
+    const scoreMultRow = document.createElement('div');
+    scoreMultRow.style.display = 'flex';
+    scoreMultRow.style.gap = '5px';
+    scoreMultRow.style.marginBottom = '8px';
+
+    const scoreMultInput = document.createElement('input');
+    scoreMultInput.type = 'number';
+    scoreMultInput.value = '20';
+    scoreMultInput.style.width = '55px';
+    scoreMultInput.style.padding = '6px';
+    scoreMultInput.style.border = '1px solid #ccc';
+    scoreMultInput.style.borderRadius = '3px';
+
+    const scoreMultBtn = makeButton('Multiplier: OFF', '#607d8b', '#546069', () => {
+        scoreMultOn = !scoreMultOn;
+        scoreMultBtn.textContent = 'Multiplier: ' + (scoreMultOn ? 'ON (' + scoreMultInput.value + 'x)' : 'OFF');
+        scoreMultBtn.style.backgroundColor = scoreMultOn ? '#e91e63' : '#607d8b';
+
+        if (scoreMultOn) {
+            lastKnownScore = null;
+            whenGameReady((ig) => {
+                scoreMultInterval = setInterval(() => {
+                    const g = ig.game || ig.currentGame;
+                    if (!g || typeof g.lastScore !== 'number') return;
+                    if (lastKnownScore === null) {
+                        lastKnownScore = g.lastScore;
+                        return;
+                    }
+                    const delta = g.lastScore - lastKnownScore;
+                    if (delta > 0) {
+                        const mult = parseFloat(scoreMultInput.value) || 1;
+                        g.lastScore += delta * (mult - 1);
+                    }
+                    lastKnownScore = g.lastScore;
+                }, 100);
+            });
+        } else if (scoreMultInterval) {
+            clearInterval(scoreMultInterval);
+            scoreMultInterval = null;
+        }
+    });
+    scoreMultBtn.style.marginBottom = '0';
+    scoreMultBtn.style.flex = '1';
+
+    scoreMultRow.appendChild(scoreMultInput);
+    scoreMultRow.appendChild(scoreMultBtn);
+    contentPanel.appendChild(scoreMultRow);
+
+    // ---------- Course Editing ----------
+    const courseTitle = document.createElement('h4');
+    courseTitle.innerHTML = 'Course:';
+    courseTitle.style.margin = '10px 0 5px 0';
+    contentPanel.appendChild(courseTitle);
+
+    // Patches the function that triggers a turn to a no-op, so the track
+    // pattern generator keeps extending in a straight line forever instead
+    // of alternating direction. Restores the original function when toggled
+    // off, so it stops affecting patterns generated after that point.
+    let straightOnly = false;
+    let originalToggleBlockDirection = null;
+
+    const straightOnlyBtn = makeButton('Straight Only: OFF', '#607d8b', '#546069', () => {
+        straightOnly = !straightOnly;
+        straightOnlyBtn.textContent = 'Straight Only: ' + (straightOnly ? 'ON' : 'OFF');
+        straightOnlyBtn.style.backgroundColor = straightOnly ? '#e91e63' : '#607d8b';
+
+        whenGameReady((ig) => {
+            const scene = ig.gameScene;
+            if (!scene || typeof scene.toggleBlockDirection !== 'function') {
+                if (debugOn) console.warn('[Course] toggleBlockDirection not found on gameScene');
+                return;
+            }
+            if (straightOnly) {
+                if (!originalToggleBlockDirection) {
+                    originalToggleBlockDirection = scene.toggleBlockDirection.bind(scene);
+                }
+                scene.toggleBlockDirection = function () { /* no-op: suppress turns */ };
+            } else if (originalToggleBlockDirection) {
+                scene.toggleBlockDirection = originalToggleBlockDirection;
+            }
+        });
+    });
+    contentPanel.appendChild(straightOnlyBtn);
+
+    const courseNote = document.createElement('p');
+    courseNote.textContent = 'Straight Only stops new turns from generating. Existing turns already placed ahead of you will still happen once.';
+    courseNote.style.fontSize = '11px';
+    courseNote.style.color = '#666';
+    courseNote.style.margin = '5px 0 10px 0';
+    contentPanel.appendChild(courseNote);
     cartitle.style.margin = '0 0 5px 0';
     contentPanel.appendChild(cartitle);
     const carsubtitle = document.createElement('p');
