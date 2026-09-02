@@ -630,6 +630,9 @@
     courseNote.style.color = '#666';
     courseNote.style.margin = '5px 0 10px 0';
     contentPanel.appendChild(courseNote);
+
+    const cartitle = document.createElement('h4');
+    cartitle.innerHTML = 'Change Car:';
     cartitle.style.margin = '0 0 5px 0';
     contentPanel.appendChild(cartitle);
     const carsubtitle = document.createElement('p');
