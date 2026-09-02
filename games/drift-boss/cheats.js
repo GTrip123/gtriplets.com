@@ -769,7 +769,551 @@
     }
 
     contentPanel.appendChild(wheelContainer);
+// ---------- Custom car builder ----------
+const builderTitle = document.createElement('h4');
+builderTitle.textContent = 'Build Your Own Car:';
+builderTitle.style.margin = '15px 0 5px 0';
+contentPanel.appendChild(builderTitle);
 
+const carNameInput = document.createElement('input');
+carNameInput.type = 'text';
+carNameInput.placeholder = 'Custom car name';
+carNameInput.maxLength = 30;
+carNameInput.style.boxSizing = 'border-box';
+carNameInput.style.width = '100%';
+carNameInput.style.padding = '6px';
+carNameInput.style.marginBottom = '8px';
+contentPanel.appendChild(carNameInput);
+
+// Image uploader
+const textureInput = document.createElement('input');
+textureInput.type = 'file';
+textureInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
+textureInput.style.width = '100%';
+textureInput.style.marginBottom = '8px';
+contentPanel.appendChild(textureInput);
+
+const textureStatus = document.createElement('p');
+textureStatus.textContent = 'Upload an image for the car.';
+textureStatus.style.fontSize = '11px';
+textureStatus.style.color = '#666';
+textureStatus.style.margin = '0 0 10px 0';
+contentPanel.appendChild(textureStatus);
+
+function makeStatSlider(label, min, max, step, value, suffix) {
+    const wrap = document.createElement('div');
+    wrap.style.marginBottom = '9px';
+
+    const text = document.createElement('div');
+    text.style.display = 'flex';
+    text.style.justifyContent = 'space-between';
+    text.style.fontSize = '12px';
+    text.style.fontWeight = 'bold';
+
+    const labelNode = document.createElement('span');
+    labelNode.textContent = label;
+
+    const valueNode = document.createElement('span');
+
+    text.appendChild(labelNode);
+    text.appendChild(valueNode);
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = String(min);
+    slider.max = String(max);
+    slider.step = String(step);
+    slider.value = String(value);
+    slider.style.width = '100%';
+
+    function updateText() {
+        valueNode.textContent = slider.value + (suffix || '');
+    }
+
+    slider.addEventListener('input', updateText);
+    updateText();
+
+    wrap.appendChild(text);
+    wrap.appendChild(slider);
+    contentPanel.appendChild(wrap);
+
+    return slider;
+}
+
+// Normal speed is approximately 30.
+const topSpeedSlider =
+    makeStatSlider('Top speed', 10, 100, 1, 30, '');
+
+const accelerationSlider =
+    makeStatSlider('Acceleration', 0, 40, 1, 12, '');
+
+const turnSlider =
+    makeStatSlider('Turn sharpness', 25, 250, 5, 100, '%');
+
+const gripSlider =
+    makeStatSlider('Grip / less drift', 0, 100, 1, 35, '%');
+
+const builderNote = document.createElement('p');
+builderNote.textContent =
+    'Higher grip means less sliding. Lower grip creates longer drifts. ' +
+    'Turn sharpness at 100% is approximately normal.';
+builderNote.style.fontSize = '11px';
+builderNote.style.color = '#666';
+builderNote.style.margin = '0 0 8px 0';
+contentPanel.appendChild(builderNote);
+
+let customCarImage = null;
+let customStatsEnabled = false;
+let customCarInterval = null;
+let patchedStatsCar = null;
+let lastTexturedSkin = null;
+
+function readCustomStats() {
+    return {
+        name: carNameInput.value.trim() || 'Custom Car',
+        topSpeed: Number(topSpeedSlider.value),
+        acceleration: Number(accelerationSlider.value),
+        turnMultiplier: Number(turnSlider.value) / 100,
+
+        // Converts the 0–100 slider into the game's friction range.
+        grip: Number(gripSlider.value) / 1000
+    };
+}
+
+function collectCarMeshes(car) {
+    const meshes = [];
+    const seen = new Set();
+
+    function addMesh(mesh) {
+        if (!mesh || typeof mesh !== 'object' || seen.has(mesh)) {
+            return;
+        }
+
+        seen.add(mesh);
+
+        if (mesh.material) {
+            meshes.push(mesh);
+        }
+
+        if (typeof mesh.getChildMeshes === 'function') {
+            mesh.getChildMeshes(false).forEach(addMesh);
+        }
+    }
+
+    // The visible model is usually car.skin.
+    addMesh(car.skin);
+    addMesh(car.chassis);
+
+    Object.keys(car).forEach(function(key) {
+        addMesh(car[key]);
+    });
+
+    return meshes;
+}
+
+function replaceMaterialTexture(
+    material,
+    imageUrl,
+    babylonScene,
+    meshName
+) {
+    if (!material) {
+        return 0;
+    }
+
+    // Handle cars that use multiple materials.
+    if (material.subMaterials && material.subMaterials.length) {
+        let changed = 0;
+
+        material.subMaterials = material.subMaterials.map(
+            function(subMaterial, index) {
+                if (!subMaterial) {
+                    return subMaterial;
+                }
+
+                const clone =
+                    typeof subMaterial.clone === 'function'
+                        ? subMaterial.clone(
+                            'custom-car-' +
+                            meshName +
+                            '-sub-' +
+                            index
+                        )
+                        : subMaterial;
+
+                changed += replaceMaterialTexture(
+                    clone,
+                    imageUrl,
+                    babylonScene,
+                    meshName + '-' + index
+                );
+
+                return clone;
+            }
+        );
+
+        return changed;
+    }
+
+    const texture = new window.BABYLON.Texture(
+        imageUrl,
+        babylonScene,
+        false,
+        false,
+        window.BABYLON.Texture.TRILINEAR_SAMPLINGMODE
+    );
+
+    texture.name = 'uploaded-custom-car-texture';
+
+    // PBR materials use albedoTexture.
+    if ('albedoTexture' in material) {
+        material.albedoTexture = texture;
+
+        if ('useAlphaFromAlbedoTexture' in material) {
+            material.useAlphaFromAlbedoTexture = true;
+        }
+
+        return 1;
+    }
+
+    // Standard materials use diffuseTexture.
+    if ('diffuseTexture' in material) {
+        material.diffuseTexture = texture;
+        return 1;
+    }
+
+    return 0;
+}
+
+function applyCustomCarTexture(ig) {
+    const gameScene = ig.gameScene;
+    const car = gameScene && gameScene.carSkeleton;
+
+    if (
+        !customCarImage ||
+        !car ||
+        !car.chassis ||
+        !window.BABYLON
+    ) {
+        return false;
+    }
+
+    const babylonScene =
+        typeof car.chassis.getScene === 'function'
+            ? car.chassis.getScene()
+            : (
+                window.wgl &&
+                wgl.game &&
+                wgl.game.currentScene
+            );
+
+    if (!babylonScene) {
+        return false;
+    }
+
+    let changed = 0;
+
+    collectCarMeshes(car).forEach(function(mesh, index) {
+        const originalMaterial = mesh.material;
+
+        if (!originalMaterial) {
+            return;
+        }
+
+        const clonedMaterial =
+            typeof originalMaterial.clone === 'function'
+                ? originalMaterial.clone(
+                    'custom-car-material-' +
+                    (mesh.name || index)
+                )
+                : originalMaterial;
+
+        mesh.material = clonedMaterial;
+
+        changed += replaceMaterialTexture(
+            clonedMaterial,
+            customCarImage,
+            babylonScene,
+            mesh.name || String(index)
+        );
+    });
+
+    if (changed > 0) {
+        lastTexturedSkin = car.skin;
+
+        textureStatus.textContent =
+            'Image applied to ' +
+            changed +
+            ' car material(s).';
+
+        textureStatus.style.color = '#2e7d32';
+        return true;
+    }
+
+    return false;
+}
+
+textureInput.addEventListener('change', function() {
+    const file =
+        textureInput.files &&
+        textureInput.files[0];
+
+    if (!file) {
+        return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+        alert('Please select a PNG, JPG, WebP, or GIF image.');
+        textureInput.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function() {
+        customCarImage = reader.result;
+        lastTexturedSkin = null;
+
+        textureStatus.textContent =
+            'Image loaded. Click Build & Apply Custom Car.';
+
+        textureStatus.style.color = '#135dd4';
+    };
+
+    reader.onerror = function() {
+        alert('The image could not be read. Try another image.');
+    };
+
+    reader.readAsDataURL(file);
+});
+
+function patchCustomCarStats(car) {
+    if (!car || patchedStatsCar === car) {
+        return;
+    }
+
+    patchedStatsCar = car;
+
+    // Wrap the game's steering method so the turn slider controls
+    // how quickly the car rotates into a turn.
+    if (
+        !car.__customOriginalUpdateSteering &&
+        typeof car.updateSteering === 'function'
+    ) {
+        car.__customOriginalUpdateSteering =
+            car.updateSteering;
+
+        car.updateSteering = function() {
+            if (
+                !customStatsEnabled ||
+                !window.ig ||
+                !ig.gameScene
+            ) {
+                return this
+                    .__customOriginalUpdateSteering
+                    .apply(this, arguments);
+            }
+
+            const originalFactor =
+                ig.gameScene.physicsDeltaFactor;
+
+            ig.gameScene.physicsDeltaFactor =
+                originalFactor *
+                readCustomStats().turnMultiplier;
+
+            try {
+                return this
+                    .__customOriginalUpdateSteering
+                    .apply(this, arguments);
+            } finally {
+                ig.gameScene.physicsDeltaFactor =
+                    originalFactor;
+            }
+        };
+    }
+
+    // Give acceleration a fresh starting speed after the car resets.
+    if (
+        !car.__customOriginalResetPosition &&
+        typeof car.resetPosition === 'function'
+    ) {
+        car.__customOriginalResetPosition =
+            car.resetPosition;
+
+        car.resetPosition = function() {
+            const result =
+                this
+                    .__customOriginalResetPosition
+                    .apply(this, arguments);
+
+            if (customStatsEnabled) {
+                const stats = readCustomStats();
+
+                this.speed = -Math.max(
+                    5,
+                    stats.topSpeed * 0.5
+                );
+            }
+
+            return result;
+        };
+    }
+}
+
+function applyCustomStats(ig) {
+    const car =
+        ig.gameScene &&
+        ig.gameScene.carSkeleton;
+
+    if (
+        !customStatsEnabled ||
+        !car ||
+        !car.chassis
+    ) {
+        return false;
+    }
+
+    const stats = readCustomStats();
+
+    patchCustomCarStats(car);
+
+    car.defaultSpeed = -stats.topSpeed;
+    car.maxSpeed = -stats.topSpeed;
+
+    const impostor =
+        car.chassis.physicsImpostor;
+
+    if (impostor) {
+        impostor.friction = stats.grip;
+
+        if (typeof impostor.setParam === 'function') {
+            impostor.setParam(
+                'friction',
+                stats.grip
+            );
+        }
+
+        if (
+            impostor.physicsBody &&
+            impostor.physicsBody.material
+        ) {
+            impostor.physicsBody.material.friction =
+                stats.grip;
+        }
+    }
+
+    // Forward speeds are negative in this game.
+    const targetSpeed = -stats.topSpeed;
+
+    if (
+        stats.acceleration > 0 &&
+        car.speed > targetSpeed
+    ) {
+        car.speed = Math.max(
+            targetSpeed,
+            car.speed -
+                stats.acceleration * 0.05
+        );
+    } else if (car.speed < targetSpeed) {
+        car.speed = targetSpeed;
+    }
+
+    return true;
+}
+
+const applyCarButton = makeButton(
+    'Build & Apply Custom Car',
+    '#ff6f00',
+    '#e65100',
+    function() {
+        customStatsEnabled = true;
+
+        whenGameReady(function(ig) {
+            const car =
+                ig.gameScene &&
+                ig.gameScene.carSkeleton;
+
+            if (!car) {
+                alert(
+                    'Start a run first, then click ' +
+                    'Build & Apply Custom Car again.'
+                );
+
+                return;
+            }
+
+            patchCustomCarStats(car);
+
+            const stats = readCustomStats();
+
+            // Begin at half speed and accelerate to top speed.
+            car.speed = -Math.max(
+                5,
+                stats.topSpeed * 0.5
+            );
+
+            applyCustomStats(ig);
+
+            if (customCarImage) {
+                applyCustomCarTexture(ig);
+            }
+
+            if (!customCarInterval) {
+                customCarInterval = setInterval(
+                    function() {
+                        if (!customStatsEnabled) {
+                            return;
+                        }
+
+                        const liveCar =
+                            ig.gameScene &&
+                            ig.gameScene.carSkeleton;
+
+                        if (
+                            liveCar &&
+                            liveCar !== patchedStatsCar
+                        ) {
+                            patchCustomCarStats(liveCar);
+                        }
+
+                        applyCustomStats(ig);
+
+                        // Reapply the image if a new skin is loaded.
+                        if (
+                            customCarImage &&
+                            liveCar &&
+                            liveCar.skin &&
+                            liveCar.skin !== lastTexturedSkin
+                        ) {
+                            applyCustomCarTexture(ig);
+                        }
+                    },
+                    50
+                );
+            }
+
+            alert(stats.name + ' applied!');
+        });
+    }
+);
+
+contentPanel.appendChild(applyCarButton);
+
+const disableCarButton = makeButton(
+    'Disable Custom Stats',
+    '#607d8b',
+    '#546e7a',
+    function() {
+        customStatsEnabled = false;
+
+        alert(
+            'Custom stats disabled. Select a normal car ' +
+            'or reload the page to restore its normal settings.'
+        );
+    }
+);
+
+contentPanel.appendChild(disableCarButton);
     // Add toggle functionality
     let isOpen = false;
     tab.onclick = () => {
