@@ -590,42 +590,122 @@
 
     // ---------- Course Editing ----------
     const courseTitle = document.createElement('h4');
-    courseTitle.innerHTML = 'Course:';
+    courseTitle.innerHTML = 'Course Patterns:';
     courseTitle.style.margin = '10px 0 5px 0';
     contentPanel.appendChild(courseTitle);
 
-    // Patches the function that triggers a turn to a no-op, so the track
-    // pattern generator keeps extending in a straight line forever instead
-    // of alternating direction. Restores the original function when toggled
-    // off, so it stops affecting patterns generated after that point.
-    let straightOnly = false;
-    let originalToggleBlockDirection = null;
+    const courseNote2 = document.createElement('p');
+    courseNote2.textContent = 'Check the pattern types allowed to generate. None checked = normal (all patterns).';
+    courseNote2.style.fontSize = '11px';
+    courseNote2.style.color = '#666';
+    courseNote2.style.margin = '0 0 8px 0';
+    contentPanel.appendChild(courseNote2);
 
-    const straightOnlyBtn = makeButton('Straight Only: OFF', '#607d8b', '#546069', () => {
-        straightOnly = !straightOnly;
-        straightOnlyBtn.textContent = 'Straight Only: ' + (straightOnly ? 'ON' : 'OFF');
-        straightOnlyBtn.style.backgroundColor = straightOnly ? '#e91e63' : '#607d8b';
+    // The 10 pattern types the game's own generatePlatformPattern() picks
+    // between at random. Rather than blocking turns entirely (blunt), this
+    // hooks the ONE random call that selects which pattern comes next and
+    // constrains it to only the checked types - so "ramps only", "no
+    // zig-zags", "flat + ramp mix", etc. are all possible.
+    const PATTERN_TYPES = [
+        { id: 0, label: 'Flat (straight)' },
+        { id: 1, label: 'Zig Zag' },
+        { id: 2, label: 'Small Bump' },
+        { id: 3, label: 'Small Valley' },
+        { id: 4, label: 'Half Line' },
+        { id: 5, label: 'Valley Bump' },
+        { id: 6, label: 'Split Bump' },
+        { id: 7, label: 'Ramp' },
+        { id: 8, label: 'Split Line' },
+        { id: 9, label: 'Half Zig Zag' }
+    ];
 
-        whenGameReady((ig) => {
-            const scene = ig.gameScene;
-            if (!scene || typeof scene.toggleBlockDirection !== 'function') {
-                if (debugOn) console.warn('[Course] toggleBlockDirection not found on gameScene');
-                return;
-            }
-            if (straightOnly) {
-                if (!originalToggleBlockDirection) {
-                    originalToggleBlockDirection = scene.toggleBlockDirection.bind(scene);
+    const patternCheckboxes = {};
+    const patternGrid = document.createElement('div');
+    patternGrid.style.display = 'grid';
+    patternGrid.style.gridTemplateColumns = '1fr 1fr';
+    patternGrid.style.gap = '3px';
+    patternGrid.style.marginBottom = '8px';
+    patternGrid.style.fontSize = '12px';
+
+    PATTERN_TYPES.forEach(p => {
+        const label = document.createElement('label');
+        label.style.display = 'flex';
+        label.style.alignItems = 'center';
+        label.style.gap = '4px';
+        label.style.cursor = 'pointer';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        patternCheckboxes[p.id] = cb;
+
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(p.label));
+        patternGrid.appendChild(label);
+    });
+    contentPanel.appendChild(patternGrid);
+
+    // Patch state - applied once and reused; only the allowed-list itself
+    // changes on Apply, so the underlying hook stays lightweight.
+    let originalGeneratePattern = null;
+    let originalRandomInt = null;
+    let allowedPatterns = null; // null/[] = no filter, normal random behavior
+    let interceptNextPatternRandom = false;
+
+    function installPatternHook(ig) {
+        const scene = ig.gameScene;
+        if (!scene || typeof scene.generatePlatformPattern !== 'function' || !ig.random || typeof ig.random.int !== 'function') {
+            if (debugOn) console.warn('[Course] generatePlatformPattern or ig.random.int not found');
+            return false;
+        }
+        if (!originalGeneratePattern) {
+            originalGeneratePattern = scene.generatePlatformPattern.bind(scene);
+        }
+        if (!originalRandomInt) {
+            originalRandomInt = ig.random.int.bind(ig.random);
+        }
+        if (!ig.random.__cheatsPatched) {
+            ig.random.__cheatsPatched = true;
+            // The pattern-index selection is the very FIRST ig.random.int()
+            // call inside generatePlatformPattern's body, before any nested
+            // generate* function runs its own random calls (tile counts,
+            // etc.) - so a one-shot intercept flag targets exactly that call
+            // and leaves everything downstream genuinely random.
+            ig.random.int = function (min, max) {
+                if (interceptNextPatternRandom) {
+                    interceptNextPatternRandom = false;
+                    if (allowedPatterns && allowedPatterns.length > 0) {
+                        return allowedPatterns[Math.floor(Math.random() * allowedPatterns.length)];
+                    }
                 }
-                scene.toggleBlockDirection = function () { /* no-op: suppress turns */ };
-            } else if (originalToggleBlockDirection) {
-                scene.toggleBlockDirection = originalToggleBlockDirection;
+                return originalRandomInt(min, max);
+            };
+        }
+        if (!scene.__cheatsPatched) {
+            scene.__cheatsPatched = true;
+            scene.generatePlatformPattern = function () {
+                interceptNextPatternRandom = true;
+                return originalGeneratePattern();
+            };
+        }
+        return true;
+    }
+
+    const applyPatternsBtn = makeButton('Apply Course Filter', '#3f51b5', '#32408f', () => {
+        const chosen = PATTERN_TYPES.filter(p => patternCheckboxes[p.id].checked).map(p => p.id);
+        allowedPatterns = chosen;
+        whenGameReady((ig) => {
+            const ok = installPatternHook(ig);
+            if (ok) {
+                alert(chosen.length > 0
+                    ? 'Course filter applied: only ' + chosen.length + ' pattern type(s) will generate from now on.'
+                    : 'Course filter cleared - back to normal random patterns.');
             }
         });
     });
-    contentPanel.appendChild(straightOnlyBtn);
+    contentPanel.appendChild(applyPatternsBtn);
 
     const courseNote = document.createElement('p');
-    courseNote.textContent = 'Straight Only stops new turns from generating. Existing turns already placed ahead of you will still happen once.';
+    courseNote.textContent = 'Applies to new patterns generated from now on - track already placed ahead of you keeps whatever was already generated.';
     courseNote.style.fontSize = '11px';
     courseNote.style.color = '#666';
     courseNote.style.margin = '5px 0 10px 0';
