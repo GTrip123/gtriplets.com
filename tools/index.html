@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>my tools</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      background: #f7f7f7;
+      color: #222;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .link-row {
+      width: 100%;
+      max-width: 1000px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .link-item {
+      display: flex;
+      flex-direction: column;
+      padding: 24px;
+      background: #ffffff;
+      border: 1px solid #e4e4e4;
+      border-radius: 10px;
+    }
+
+    .link-item h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .link-item p {
+      flex-grow: 1;
+      margin: 0 0 22px;
+      color: #777;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .link-button {
+      display: inline-block;
+      width: fit-content;
+      padding: 10px 16px;
+      background: #222;
+      color: #ffffff;
+      border-radius: 6px;
+      font-size: 14px;
+      text-decoration: none;
+      transition: background 0.2s ease;
+    }
+
+    .link-button:hover {
+      background: #555;
+    }
+
+    .link-button:focus {
+      outline: 3px solid #bbbbbb;
+      outline-offset: 3px;
+    }
+
+    @media (max-width: 750px) {
+      .link-row {
+        grid-template-columns: 1fr;
+        max-width: 500px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <main class="link-row">
+
+    <section class="link-item">
+      <h2>bass booster</h2>
+      <p>bass boost audio</p>
+      <a
+        class="link-button"
+        href="https://gtriplets.com/tools/bass-booster.html"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        visit bass booster
+      </a>
+    </section>
+
+    <section class="link-item">
+      <h2>video compressor</h2>
+      <p>compress video to specified mb's </p>
+      <a
+        class="link-button"
+        href="https://gtriplets.com/tools/video-compressor.html"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        visit video compressor
+      </a>
+    </section>
+
+    <section class="link-item">
+      <h2>voice editor</h2>
+      <p>do stuff like distort, autotune and other stuff to your voice</p>
+      <a
+        class="link-button"
+        href="https://gtriplets.com/tools/voice-editor.html"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        visit voice editor
+      </a>
+    </section>
+
+  </main>
+
+</body>
+</html>

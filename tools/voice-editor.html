@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>voice studio</title>
+  <style>
+    :root{--bg:#070816;--card:#111329;--line:#292d52;--text:#f6f7ff;--muted:#9ca3c7;--pink:#ff4fc8;--violet:#845cff;--cyan:#35d9ff}
+    *{box-sizing:border-box} body{margin:0;min-height:100vh;color:var(--text);font:15px/1.45 Inter,ui-sans-serif,system-ui;background:radial-gradient(circle at 15% 15%,#33205d 0,transparent 30%),radial-gradient(circle at 85% 5%,#143d56 0,transparent 26%),var(--bg);display:grid;place-items:center;padding:24px}
+    .app{width:min(980px,100%);background:rgba(12,14,31,.88);border:1px solid #ffffff18;border-radius:26px;box-shadow:0 25px 90px #0009;overflow:hidden;backdrop-filter:blur(18px)}
+    header{display:flex;align-items:center;justify-content:space-between;padding:24px 28px;border-bottom:1px solid var(--line)}
+    h1{font-size:25px;margin:0;letter-spacing:-.6px}.badge{font-size:12px;color:#d9dcff;background:#ffffff12;border:1px solid #ffffff18;padding:6px 10px;border-radius:999px}
+    main{padding:26px}.visual{height:190px;background:linear-gradient(180deg,#0a0c1c,#10142e);border:1px solid var(--line);border-radius:18px;overflow:hidden;position:relative}canvas{width:100%;height:100%;display:block}.hint{position:absolute;inset:auto 0 16px;text-align:center;color:var(--muted);pointer-events:none}
+    .preset-row{display:flex;gap:9px;flex-wrap:wrap;margin:20px 0}.preset,.ghost{border:1px solid var(--line);background:#171a35;color:#dfe2ff;padding:9px 13px;border-radius:11px;cursor:pointer}.preset:hover,.preset.active{border-color:var(--violet);background:#241f4e}.ghost:hover{border-color:#6870a5}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.control{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:16px}.control-top{display:flex;justify-content:space-between;margin-bottom:11px}.value{color:var(--cyan);font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:var(--violet)}
+    .actions{display:flex;align-items:center;gap:12px;margin-top:22px;flex-wrap:wrap}button{font:inherit}.record{border:0;color:#fff;font-weight:750;padding:13px 18px;border-radius:13px;cursor:pointer;background:linear-gradient(135deg,var(--pink),var(--violet));box-shadow:0 8px 30px #c73caa44}.record.recording{background:#ef315f;animation:pulse 1.2s infinite}.record:disabled,.ghost:disabled{opacity:.45;cursor:not-allowed}.timer{font-variant-numeric:tabular-nums;color:#cdd1f2;min-width:52px}audio{width:100%;margin-top:18px;display:none}.note{color:var(--muted);font-size:12px;margin:13px 2px 0}@keyframes pulse{50%{box-shadow:0 0 0 8px #ef315f20}}@media(max-width:700px){.grid{grid-template-columns:1fr 1fr}}@media(max-width:470px){main{padding:18px}.grid{grid-template-columns:1fr}header{padding:20px}}
+  </style>
+</head>
+<body>
+  <section class="app">
+    <header><h1>✦ voice studio</h1><span class="badge" id="status">MIC OFF</span></header>
+    <main>
+      <div class="visual"><canvas id="scope"></canvas><div class="hint" id="hint">Press “Enable microphone” to begin</div></div>
+      <div class="preset-row">
+        <button class="preset active" data-preset="clean">Clean</button><button class="preset" data-preset="pop">Pop Vocal</button><button class="preset" data-preset="robot">Robot Tune</button><button class="preset" data-preset="dream">Dreamy</button><button class="preset" data-preset="monster">Monster</button>
+      </div>
+      <div class="grid">
+        <label class="control"><span class="control-top"><span>Auto-Tune style</span><span class="value" id="robotV">0%</span></span><input id="robot" type="range" min="0" max="100" value="0"></label>
+        <label class="control"><span class="control-top"><span>Distortion</span><span class="value" id="driveV">0%</span></span><input id="drive" type="range" min="0" max="100" value="0"></label>
+        <label class="control"><span class="control-top"><span>Echo</span><span class="value" id="echoV">0%</span></span><input id="echo" type="range" min="0" max="100" value="0"></label>
+        <label class="control"><span class="control-top"><span>Reverb</span><span class="value" id="reverbV">0%</span></span><input id="reverb" type="range" min="0" max="100" value="0"></label>
+        <label class="control"><span class="control-top"><span>Tone</span><span class="value" id="toneV">0</span></span><input id="tone" type="range" min="-12" max="12" value="0"></label>
+        <label class="control"><span class="control-top"><span>Output</span><span class="value" id="volumeV">90%</span></span><input id="volume" type="range" min="0" max="120" value="90"></label>
+      </div>
+      <div class="actions"><button class="ghost" id="enable">Enable microphone</button><button class="record" id="record" disabled>● Start recording</button><span class="timer" id="timer">00:00</span><button class="ghost" id="download" disabled>Download take</button></div>
+      <audio id="playback" controls></audio>
+      <p class="note">Note: Use headphones to prevent feedback.</p>
+    </main>
+  </section>
+<script>
+  const $=id=>document.getElementById(id); let ctx,stream,recorder,chunks=[],recordedUrl,timerId,startAt,nodes={};
+  const sliders=['robot','drive','echo','reverb','tone','volume'];
+  const presets={clean:[0,0,0,0,0,90],pop:[8,5,8,12,3,95],robot:[85,18,8,5,2,90],dream:[18,4,28,52,4,88],monster:[55,78,18,15,-8,92]};
+  function curve(amount){const n=44100,a=amount*4,c=new Float32Array(n);for(let i=0;i<n;i++){const x=i*2/n-1;c[i]=(3+a)*x*20*Math.PI/180/(Math.PI+a*Math.abs(x));}return c}
+  function impulse(ac,seconds=2.4,decay=2.5){const b=ac.createBuffer(2,ac.sampleRate*seconds,ac.sampleRate);for(let c=0;c<2;c++){const d=b.getChannelData(c);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,decay)}return b}
+  async function enableMic(){
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}); ctx=new (window.AudioContext||window.webkitAudioContext)(); await ctx.resume();
+      const source=ctx.createMediaStreamSource(stream),input=ctx.createGain(),dry=ctx.createGain(),robotWet=ctx.createGain(),ring=ctx.createGain(),osc=ctx.createOscillator(),dist=ctx.createWaveShaper(),filter=ctx.createBiquadFilter(),delay=ctx.createDelay(1),feedback=ctx.createGain(),echoWet=ctx.createGain(),convolver=ctx.createConvolver(),reverbWet=ctx.createGain(),compressor=ctx.createDynamicsCompressor(),master=ctx.createGain(),analyser=ctx.createAnalyser(),dest=ctx.createMediaStreamDestination();
+      filter.type='peaking';filter.frequency.value=2600;filter.Q.value=.75; delay.delayTime.value=.22; feedback.gain.value=.28;convolver.buffer=impulse(ctx);compressor.threshold.value=-22;compressor.ratio.value=4;analyser.fftSize=512;
+      osc.type='sine';osc.frequency.value=48;osc.connect(ring.gain);osc.start(); ring.gain.value=0;
+      source.connect(input); input.connect(dry); input.connect(ring);dry.connect(dist);ring.connect(robotWet).connect(dist);dist.connect(filter);filter.connect(compressor);filter.connect(delay);delay.connect(feedback).connect(delay);delay.connect(echoWet).connect(compressor);filter.connect(convolver).connect(reverbWet).connect(compressor);compressor.connect(master);master.connect(analyser);analyser.connect(ctx.destination);master.connect(dest);
+      Object.assign(nodes,{dry,robotWet,ring,dist,filter,echoWet,reverbWet,master,analyser,dest}); update(); draw();
+      $('enable').textContent='Microphone enabled';$('enable').disabled=true;$('record').disabled=false;$('status').textContent='LIVE';$('hint').style.display='none';
+    }catch(e){$('status').textContent='MIC BLOCKED';$('hint').textContent='Microphone permission was denied or unavailable.'}
+  }
+  function update(){if(!ctx)return;const r=+$('robot').value/100,d=+$('drive').value,e=+$('echo').value/100,v=+$('reverb').value/100,t=+$('tone').value,vol=+$('volume').value/100;nodes.dry.gain.setTargetAtTime(1-r*.75,ctx.currentTime,.02);nodes.robotWet.gain.setTargetAtTime(r*.9,ctx.currentTime,.02);nodes.ring.gain.setTargetAtTime(r*.8,ctx.currentTime,.02);nodes.dist.curve=d?curve(d):null;nodes.dist.oversample='4x';nodes.echoWet.gain.setTargetAtTime(e*.75,ctx.currentTime,.02);nodes.reverbWet.gain.setTargetAtTime(v*.8,ctx.currentTime,.02);nodes.filter.gain.setTargetAtTime(t,ctx.currentTime,.02);nodes.master.gain.setTargetAtTime(vol,ctx.currentTime,.02)}
+  sliders.forEach(id=>$(id).addEventListener('input',()=>{const val=$(id).value;$(id+'V').textContent=id==='tone'?(val>0?'+':'')+val:(val+'%');update()}));
+  document.querySelectorAll('.preset').forEach(b=>b.onclick=()=>{document.querySelectorAll('.preset').forEach(x=>x.classList.remove('active'));b.classList.add('active');sliders.forEach((id,i)=>{$(id).value=presets[b.dataset.preset][i];$(id).dispatchEvent(new Event('input'))})});
+  function draw(){const c=$('scope'),g=c.getContext('2d'),a=nodes.analyser,data=new Uint8Array(a.frequencyBinCount);function frame(){requestAnimationFrame(frame);c.width=c.clientWidth*devicePixelRatio;c.height=c.clientHeight*devicePixelRatio;a.getByteFrequencyData(data);g.clearRect(0,0,c.width,c.height);const grad=g.createLinearGradient(0,0,c.width,0);grad.addColorStop(0,'#845cff');grad.addColorStop(.5,'#ff4fc8');grad.addColorStop(1,'#35d9ff');g.fillStyle=grad;const w=c.width/data.length;for(let i=0;i<data.length;i++){const h=data[i]/255*c.height*.88;g.fillRect(i*w,c.height-h,w*.68,h)}}frame()}
+  $('enable').onclick=enableMic;
+  $('record').onclick=()=>{if(recorder&&recorder.state==='recording'){recorder.stop();return}chunks=[];const mime=['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(MediaRecorder.isTypeSupported)||'';recorder=new MediaRecorder(nodes.dest.stream,mime?{mimeType:mime}:undefined);recorder.ondataavailable=e=>e.data.size&&chunks.push(e.data);recorder.onstop=()=>{const blob=new Blob(chunks,{type:recorder.mimeType});if(recordedUrl)URL.revokeObjectURL(recordedUrl);recordedUrl=URL.createObjectURL(blob);$('playback').src=recordedUrl;$('playback').style.display='block';$('download').disabled=false;$('record').textContent='● Start recording';$('record').classList.remove('recording');$('status').textContent='TAKE READY';clearInterval(timerId)};recorder.start();startAt=Date.now();$('record').textContent='■ Stop recording';$('record').classList.add('recording');$('status').textContent='RECORDING';timerId=setInterval(()=>{const s=Math.floor((Date.now()-startAt)/1000);$('timer').textContent=String(s/60|0).padStart(2,'0')+':'+String(s%60).padStart(2,'0')},250)};
+  $('download').onclick=()=>{const a=document.createElement('a');a.href=recordedUrl;a.download='voice-lab-take.'+(recorder.mimeType.includes('mp4')?'m4a':'webm');a.click()};
+</script>
+</body>
+</html>

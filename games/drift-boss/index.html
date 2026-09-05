@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<title>Drift Boss Unblocked</title>
-	<meta name="description" content="Drift Boss, Drift Boss Unblocked, Drift Boss Math Playground">
+	<title>drift boss</title>
+	<meta name="description" content="drift boss, drift boss cheats, drift boss gtriplets">
 	<meta property="og:image" content="drift-boss.png" />
 	<meta http-equiv="Content-type" content="text/html; charset=utf-8">
 	<meta name="viewport" content="initial-scale=1.0001, minimum-scale=1.0001, maximum-scale=1.0001, user-scalable=no, minimal-ui" />
 	<meta name="mobile-web-app-capable" content="yes">
 	<link rel="stylesheet" type="text/css" href="game.css">
-  <link rel="preload" href="/game.css" as="style">
-  <link rel="preload" href="/game.js" as="script">
-  <link rel="preload" href="/cheats.js" as="script">
+    <link rel="preload" href="game.css" as="style">
+    <link rel="preload" href="game.js" as="script">
+    <link rel="preload" href="cheats.js" as="script">
 <style>
   <link rel="stylesheet" href="/style.css">
   html,
@@ -22,7 +22,6 @@
     overflow: hidden;
     background: black;
   }
-
   header,
   nav,
   #header,
@@ -31,7 +30,6 @@
   .navbar {
     display: none !important;
   }
-
   #ajaxbar {
     position: fixed !important;
     inset: 0 !important;
@@ -40,7 +38,9 @@
     z-index: 2147483647 !important;
     margin: 0 !important;
   }
-
+  div[style*="z-index: 9999"] {
+    z-index: 2147483647 !important;
+  }
   #game,
   #webgl,
   #canvas,
@@ -50,16 +50,33 @@
   }
 </style>
 	<script src="game.js"></script>
+<script type="text/javascript">
+  let cheatsInjected = false;
 
-<script>
-  window.addEventListener("load", function () {
+  function injectCheats() {
+    if (cheatsInjected) return;
+    cheatsInjected = true;
+
     const script = document.createElement("script");
-    script.src = "cheats.js";
-    document.body.appendChild(script);
+    script.src = "cheats.js"; // relative - loads from this game's own folder
+    script.onload = function () {
+      cheatsObserver.disconnect();
+    };
+    script.onerror = function () {
+      console.error("cheats.js failed to load");
+      cheatsInjected = false; // allow retry if it genuinely failed
+    };
+    document.documentElement.appendChild(script);
+  }
+
+  window.addEventListener("load", injectCheats);
+
+  const cheatsObserver = new MutationObserver(injectCheats);
+  window.addEventListener("load", function () {
+    cheatsObserver.observe(document.body, { childList: true, subtree: true });
   });
 </script>
 </head>
-
 <body onload="setTimeout(function(){window.scrollTo(0,1)},1);">
 	<div id="ajaxbar">
 		<div id="game"><canvas id="canvas"></canvas></div>
@@ -67,6 +84,5 @@
 		<div id="orientate"><img src="media/graphics/orientate/landscape.jpg" /></div>
 		<div id="play" class="play" onclick=""><img src="media/graphics/splash/mobile/cover-start.jpg" /></div>
 	</div>
-	<script src="cheats.js"></script>
 </body>
 </html>
